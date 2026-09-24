@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.cache/
+.env
+outputs/*
+!outputs/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+*.pkl
+.venv/
+venv/
