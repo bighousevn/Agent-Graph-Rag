@@ -61,6 +61,12 @@ def main() -> None:
         action="store_true",
         help="Parse structure and report counts only; skip LLM judge_dep calls.",
     )
+    parser.add_argument(
+        "--skip-judge-dep",
+        action="store_true",
+        help="Build law_to_crime_vn.json without LLM calls (judge_dep left empty). "
+        "Does not read .env. Re-run without this flag to fill judge_dep.",
+    )
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -83,10 +89,15 @@ def main() -> None:
         print("Dry run requested: stopping before LLM calls (judge_dep).")
         return
 
-    print("[2/4] Generating judge_dep (constituent-element questions) via LLM ...")
-    config = AppConfig.from_env_file(args.dotenv_path)
-    client = LLMClient(config)
-    article_dicts = annotate_articles(article_dicts, client)
+    if args.skip_judge_dep:
+        print("[2/4] Skipping judge_dep (--skip-judge-dep): left empty.")
+        for a in article_dicts:
+            a["judge_dep"] = []
+    else:
+        print("[2/4] Generating judge_dep (constituent-element questions) via LLM ...")
+        config = AppConfig.from_env_file(args.dotenv_path)
+        client = LLMClient(config)
+        article_dicts = annotate_articles(article_dicts, client)
     with_dep = os.path.join(args.output_dir, "criminal_law_vn_judge_dep.json")
     with open(with_dep, "w", encoding="utf-8") as f:
         json.dump(article_dicts, f, ensure_ascii=False, indent=2)

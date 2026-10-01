@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 56 passed
+pytest tests/ -v                                        # kỳ vọng: 66 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -47,6 +47,12 @@ Phiên cloud trước đây bị proxy chặn nhiều trang. **Trên máy local 
 Khi cào dữ liệu phải giới hạn tốc độ (≥ 1–2 giây mỗi request) để tránh bị chặn IP.
 
 Máy local không có `pip` cho Python hệ thống. Luôn dùng `.venv/bin/python`.
+
+Máy local **không có GPU NVIDIA**. `torch` trong `.venv` là bản CPU, cài bằng:
+```bash
+.venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu
+```
+Không cài bản CUDA mặc định (~2,5 GB, vô ích ở máy này).
 
 ## 4. Kiến trúc graph của bài gốc (đã đọc trực tiếp từ code)
 
@@ -111,7 +117,7 @@ Embedding **không** phải khâu quyết định cuối cùng. Truy vấn chạ
 | 0 | Nền tảng: `config.py`, `llm.py` (client OpenAI-compatible, cache đĩa theo hash prompt), `embedding.py`, `prompts/vi.py` | ✅ Xong |
 | 1 | Tầng Law + Crime: `law/parse_blhs.py` → `judge_dep.py` → `link_guidance.py` → `build_law_crime.py`, CLI `scripts/build_law_layer.py` | ✅ Code xong và đã kiểm chứng. ⏳ `judge_dep` **chưa chạy thật** (chờ người dùng tự chạy với key) |
 | 2 | Thu thập và làm sạch bản án | ✅ **Xong cho phạm vi thu hẹp** (mục 7.1): 257 án corpus + 40 án test, lấy từ ViCSR. Chương XVI (trừ Điều 173) chưa có dữ liệu |
-| **3** | **Tầng Case: trích đặc trưng, embedding, kNN, Louvain/Cluster, ráp graph hoàn chỉnh** | ⏸️ **Tiếp theo** |
+| **3** | **Tầng Case: trích đặc trưng, embedding, kNN, Louvain/Cluster, ráp graph hoàn chỉnh** | 🔄 **Code xong và đã chạy thử toàn bộ pipeline. Chờ người dùng chạy 2 bước LLM** (mục 9) |
 | 4 | Truy vấn (mục 4.2) và đo Recall@k của Điều luật và tội danh trên tập test | Chưa làm |
 | 5+ | Agent Researcher / Auditor / Adjudicator; mở rộng toàn bộ BLHS | Chưa làm |
 
@@ -258,7 +264,7 @@ Diễn biến dài trung vị ~600 từ, tối đa 4.602 từ. Kiểm tra tự �
 - Hơn 90% án xử năm 2017–2019.
 
 **Các vấn đề dữ liệu đã phát hiện (đã đối chiếu trên dữ liệu thật):**
-1. **Lỗi ký tự `ð` thay cho `đ`**, y như file BLHS (2.244 chỗ trong `case_detail`). `normalize_text()` xử lý.
+1. **Lỗi ký tự `ð` thay cho `đ`**, y như file BLHS (2.244 chỗ trong `case_detail`), và **`ƣ` (U+01A3) thay cho `ư`** ("đƣợc", 23.907 chỗ). `normalize_text()` xử lý cả hai.
 2. **Nhãn số trộn số điều BLHS 1999 và BLHS 2015.**
    - 755 án gắn "194", trong đó 750 án là án ma túy. Đây là Điều 194 của BLHS 1999. Ở BLHS 2015, Điều 194 là tội hàng giả là thuốc chữa bệnh.
    - Tương tự: 138 (trộm cắp, bản 1999), 136, 135, 139, và 46 (giảm nhẹ, bản 1999; 1.074 án).
@@ -310,15 +316,57 @@ Diễn biến dài trung vị ~600 từ, tối đa 4.602 từ. Kiểm tra tự �
 
 ## 9. Việc tiếp theo, theo thứ tự
 
-1. **Phase 3.1, trích đặc trưng: code xong, chờ người dùng chạy.**
-   - Code: `vn_legal_graph/cases/features.py`, CLI `scripts/extract_case_features.py`.
-   - Chạy thử không cần key (Claude được chạy): `--dry-run`. Ước lượng ~400k token đầu vào cho 297 án.
-   - Người dùng tự chạy: trước `--limit 5` để đọc thử kết quả, rồi chạy toàn bộ. Cache ở `.cache/llm` nên chạy lại không tốn phí.
-   - Đầu ra: `data/processed/cases_vn_features.json` và `cases_vn_test_features.json`, có các trường `dac_trung`, `mo_ta_dac_trung`, `dac_trung_loi`.
-   - Đã kiểm tra `llm.py` với `openai` 3.22.1 bằng server giả. Lưu ý: model OpenAI họ o-series/gpt-5 không nhận `max_tokens`/`temperature`.
-2. **Phase 3.2, xây graph** (`vn_legal_graph/graph/`). Code và test dùng embedding giả. Tách bước tóm tắt cluster (cần LLM) thành lệnh riêng để người dùng chạy.
-3. Người dùng tự chạy `judge_dep` thật cho các điều trong phạm vi. Claude rà lại chất lượng.
-4. **Mở rộng sau:** cào congbobanan cho Chương XVI và các tội ma túy hiếm. Lưu ý lỗi SSL ở mục 3.
+### 9.1. Người dùng chạy (cần key), theo đúng thứ tự
+
+```bash
+# (a) Đặc trưng án: ~400k token. Thử 5 án trước, đọc kết quả, rồi chạy hết.
+.venv/bin/python scripts/extract_case_features.py --limit 5
+.venv/bin/python scripts/extract_case_features.py
+
+# (b) Dựng graph (không LLM; lần đầu tải model ~540 MB, ~1 phút trên CPU)
+.venv/bin/python scripts/build_graph.py
+
+# (c) Tóm tắt cụm: ~9k token
+.venv/bin/python scripts/summarize_clusters.py
+
+# (d) Dựng lại để gắn node Cluster (embedding lấy từ cache, rất nhanh)
+.venv/bin/python scripts/build_graph.py
+
+# (e) Không bắt buộc ngay: judge_dep thật cho 26 điều (ghi đè bản để trống)
+.venv/bin/python scripts/build_law_layer.py --chapters XVI XX
+```
+
+Claude được tự chạy các bước không cần key: `--dry-run`, `build_graph.py`, `build_cases.py`, `pytest`.
+
+### 9.2. Phase 3 — các quyết định và kết quả chạy thử
+
+- **Code:** `vn_legal_graph/graph/graph_db.py` (class `HierarGraph`), `vn_legal_graph/graph/build.py`, CLI `scripts/build_graph.py` và `scripts/summarize_clusters.py`.
+- **ID node** cố định theo loại: `law:249`, `crime:249`, `case:vicsr-123`, `cluster:3`.
+- **Embedding:** một ma trận chuẩn hoá cho mỗi loại node; tìm kiếm bằng phép nhân ma trận.
+- **Cache embedding** ở `.cache/emb/`, khoá theo (model, văn bản).
+- **Giữ y như bài gốc:**
+  - bỏ các án không có "hành vi phạm tội";
+  - chọn đại diện cụm theo 0,7·PageRank + 0,3·degree (trong thực tế degree lấn át);
+  - chạy Louvain và PageRank trên toàn graph (gồm cả Law và Crime);
+  - degree tính trên multigraph có hướng.
+- **An toàn dữ liệu:**
+  - `build_base_graph` từ chối án có `vai_tro != "corpus"`.
+  - Bản tóm tắt cụm chỉ được gắn khi đầu vào khớp nguyên văn, để tránh gắn nhầm bản tóm tắt cũ sau khi graph thay đổi.
+- **Model embedding** (đã đọc model card): PhoBERT-base-v2, 768 chiều, Apache-2.0, có huấn luyện trên Zalo Legal 2021. Đầu vào phải tách từ trước (đã làm bằng `pyvi`).
+  - Đoạn 180 từ của các điều luật dài tối đa 216 token, dưới giới hạn 256, nên không bị cắt ngầm.
+  - Kiểm tra thô: câu về ma túy gần Điều 249 hơn Điều 173 (0,42 so với 0,24), câu về trộm cắp thì ngược lại.
+- **Chạy thử với đặc trưng giả** (40 từ đầu của diễn biến, chỉ để kiểm tra code):
+  - 309 embedding; 26 Law, 26 Crime, 257 Case;
+  - 316 cạnh `RELATES_TO_LAW` (59 án có 2 tội), 771 cạnh `SIMILAR_TO`;
+  - 12 cụm; sau khi gắn tóm tắt giả thì có 12 node Cluster và 257 cạnh `BELONGS_TO`.
+  - **Số cụm và chất lượng cụm phải xem lại khi có đặc trưng thật.**
+
+### 9.3. Sau đó
+
+1. **Phase 4: truy vấn + đo Recall@k** trên 40 án test.
+   - Port `search_similar_nodes_top/direct`, `query_similar_laws`.
+   - Các bước rerank, `retrieve_law`, `judge_law` cần LLM. Nên làm trước một baseline **chỉ dùng embedding** (không LLM) để có mốc so sánh.
+2. **Mở rộng:** cào congbobanan cho Chương XVI và các tội ma túy hiếm. Lưu ý lỗi SSL ở mục 3.
 
 ## 10. Tham chiếu
 

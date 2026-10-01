@@ -41,3 +41,28 @@ def test_chunk_by_words_exact_multiple_boundary():
     assert len(chunks) == 2
     assert len(chunks[0].split()) == 180
     assert len(chunks[1].split()) == 180
+
+
+def test_cached_embedder_reuses_vectors(tmp_path):
+    import numpy as np
+
+    from vn_legal_graph.embedding import CachedEmbedder
+
+    calls = []
+
+    class Fake:
+        def encode_one(self, text):
+            calls.append(text)
+            return np.array([len(text), 1.0])
+
+        def encode_long_text(self, text):
+            calls.append(text)
+            return np.array([1.0, len(text)])
+
+    emb = CachedEmbedder(Fake(), "org/model", cache_dir=str(tmp_path))
+    a = emb.encode_long_text("ma túy")
+    b = emb.encode_long_text("ma túy")
+    c = emb.encode_one("ma túy")  # different kind -> separate cache entry
+    assert calls == ["ma túy", "ma túy"]
+    assert (a == b).all() and not (a == c).all()
+    assert (emb.hits, emb.misses) == (1, 2)

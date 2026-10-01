@@ -42,9 +42,12 @@ def normalize_text(text: str) -> str:
 
     - U+00D0 (Ð, Latin Capital Letter Eth) -> U+0110 (Đ)
     - U+00F0 (ð, Latin Small Letter Eth)   -> U+0111 (đ)
+    - U+01A3 / U+01A2 (ƣ / Ƣ, Latin Letter Oi) -> U+01B0 / U+01AF (ư / Ư),
+      left by legacy-font converters ("đƣợc"); ~24k times in ViCSR.
     - Non-breaking spaces / stray whitespace -> normal spaces, trimmed.
     """
     text = text.replace("Ð", "Đ").replace("ð", "đ")
+    text = text.replace("ƣ", "ư").replace("Ƣ", "Ư")
     text = text.replace("\xa0", " ")
     return text.strip()
 

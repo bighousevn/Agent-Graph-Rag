@@ -22,6 +22,9 @@ Phase 4.
 """
 from __future__ import annotations
 
+import hashlib
+import os
+import re
 from typing import List, Optional
 
 import numpy as np
@@ -122,11 +125,46 @@ class BgeM3ApiEncoder:
         return self.encode_one(text)
 
 
+def embedder_from_config(config: EmbeddingConfig):
+    """Build an embedder from an EmbeddingConfig alone, without reading .env."""
+    if config.backend in ("vietnamese-bi-encoder", "phobert"):
+        return VietnameseBiEncoder(config)
+    if config.backend == "bge-m3":
+        return BgeM3ApiEncoder(config)
+    raise ValueError(f"Unknown embedding backend: {config.backend!r}")
+
+
 def get_embedder(config: Optional[AppConfig] = None):
     config = config or AppConfig.from_env_file()
-    backend = config.embedding.backend
-    if backend in ("vietnamese-bi-encoder", "phobert"):
-        return VietnameseBiEncoder(config.embedding)
-    if backend == "bge-m3":
-        return BgeM3ApiEncoder(config.embedding)
-    raise ValueError(f"Unknown embedding backend: {backend!r}")
+    return embedder_from_config(config.embedding)
+
+
+class CachedEmbedder:
+    """Disk cache in front of an embedder, keyed by (model name, text), so
+    rebuilding the graph does not re-encode unchanged texts."""
+
+    def __init__(self, inner, model_name: str, cache_dir: str = ".cache/emb"):
+        self.inner = inner
+        self.dir = os.path.join(cache_dir, re.sub(r"[^\w.-]", "_", model_name))
+        os.makedirs(self.dir, exist_ok=True)
+        self.hits = self.misses = 0
+
+    def _path(self, kind: str, text: str) -> str:
+        digest = hashlib.sha256(f"{kind}\n{text}".encode("utf-8")).hexdigest()
+        return os.path.join(self.dir, f"{digest}.npy")
+
+    def _cached(self, kind: str, text: str, compute) -> np.ndarray:
+        path = self._path(kind, text)
+        if os.path.exists(path):
+            self.hits += 1
+            return np.load(path)
+        self.misses += 1
+        vec = np.asarray(compute(text), dtype=np.float32)
+        np.save(path, vec)
+        return vec
+
+    def encode_one(self, text: str) -> np.ndarray:
+        return self._cached("one", text, self.inner.encode_one)
+
+    def encode_long_text(self, text: str) -> np.ndarray:
+        return self._cached("long", text, self.inner.encode_long_text)

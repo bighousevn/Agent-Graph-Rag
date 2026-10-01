@@ -109,3 +109,7 @@ def test_entry_label_and_full_text(articles):
     text = dieu_168.full_text()
     assert text.startswith("Điều 168. Tội cướp tài sản")
     assert "a) Có tổ chức;" in text
+
+
+def test_normalize_fixes_oi_glyph():
+    assert normalize_text("đƣợc Ƣu tiên") == "được Ưu tiên"

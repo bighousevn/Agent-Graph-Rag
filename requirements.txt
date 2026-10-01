@@ -8,6 +8,8 @@ pytest>=8.0.0
 networkx>=3.2
 numpy>=1.26
 scipy>=1.11
+# torch: on a machine without NVIDIA GPU install the CPU build first:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
 sentence-transformers>=3.0.0
 pyvi>=0.1.1
 requests>=2.31.0
