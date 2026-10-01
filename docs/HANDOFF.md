@@ -117,8 +117,8 @@ Embedding **không** phải khâu quyết định cuối cùng. Truy vấn chạ
 | 0 | Nền tảng: `config.py`, `llm.py` (client OpenAI-compatible, cache đĩa theo hash prompt), `embedding.py`, `prompts/vi.py` | ✅ Xong |
 | 1 | Tầng Law + Crime: `law/parse_blhs.py` → `judge_dep.py` → `link_guidance.py` → `build_law_crime.py`, CLI `scripts/build_law_layer.py` | ✅ Code xong và đã kiểm chứng. ⏳ `judge_dep` **chưa chạy thật** (chờ người dùng tự chạy với key) |
 | 2 | Thu thập và làm sạch bản án | ✅ **Xong cho phạm vi thu hẹp** (mục 7.1): 257 án corpus + 40 án test, lấy từ ViCSR. Chương XVI (trừ Điều 173) chưa có dữ liệu |
-| **3** | **Tầng Case: trích đặc trưng, embedding, kNN, Louvain/Cluster, ráp graph hoàn chỉnh** | 🔄 **Đặc trưng đã chạy thật (297 án). Graph đã dựng; chỉ còn thiếu node Cluster** (chờ người dùng chạy `summarize_clusters.py`) |
-| 4 | Truy vấn (mục 4.2) và đo Recall@k của Điều luật và tội danh trên tập test | Chưa làm |
+| 3 | Tầng Case: trích đặc trưng, embedding, kNN, Louvain/Cluster, ráp graph hoàn chỉnh | ✅ **Xong** (2026-10-02). `outputs/hierargraph.pkl` có đủ 4 loại node. Còn vấn đề tóm tắt cụm (mục 9.2) |
+| **4** | **Truy vấn (mục 4.2) và đo Recall@k của Điều luật và tội danh trên tập test** | ⏸️ **Tiếp theo** |
 | 5+ | Agent Researcher / Auditor / Adjudicator; mở rộng toàn bộ BLHS | Chưa làm |
 
 ### Kết quả đã kiểm chứng ở Phase 1 (file thật `data/raw/law/100_2015_QH13_296661.docx`)
@@ -386,6 +386,16 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
   - Cụm 9 thuần Điều 247 (16/16 án).
   - Cụm 6 phần lớn là Điều 173 (35/37), cộng các án vừa trộm cắp vừa ma túy.
   - Án 249 và 251 chia ra 7 cụm trộn lẫn nhau. Điều này dễ hiểu, vì hành vi gần nhau và có 59 án mang cả hai nhãn.
+
+**Tóm tắt cụm (người dùng chạy, 10 cụm, ~8k token) — vấn đề cần xử lý ở Phase 4:**
+- 8/10 cụm nhận tóm tắt gần như giống hệt nhau ("Nhóm hành vi phạm tội: Tội phạm liên quan đến (chất) ma túy"). Cosine giữa các node Cluster của 8 cụm ma túy là 0,92–1,0 (trung bình 0,958).
+- Hai cụm còn lại có tóm tắt riêng: cụm 6 "chiếm đoạt tài sản và tàng trữ trái phép chất ma túy", cụm 9 "trồng cây chứa chất ma túy".
+- Nguyên nhân: prompt gốc yêu cầu "một loại khái quát ở mức cao". Với CAIL có hàng trăm tội, cách này phân biệt được các cụm. Ở phạm vi 4 tội, trong đó 3 tội là ma túy, các bản tóm tắt bị dồn về cùng một câu.
+- **Hệ quả:** nhánh `top_retrieve` (truy vấn → Cluster → Case) gần như không chọn được cụm ma túy nào cụ thể. Gánh nặng dồn hết sang nhánh `direct_retrieve`.
+- **Đề xuất cho Phase 4:**
+  - Giữ bản tóm tắt theo đúng bài gốc làm baseline.
+  - Thêm một biến thể "nêu đặc điểm phân biệt cụm này với các cụm khác" làm ablation, rồi đo xem có cải thiện không.
+  - Chi phí thêm khoảng 8k token.
 
 ### 9.2. Phase 3 — các quyết định và kết quả chạy thử
 
