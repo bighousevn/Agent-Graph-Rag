@@ -238,3 +238,11 @@ def test_judgment_year():
     assert judgment_year(DETAIL_DRUG) == 2018
     assert judgment_year(DETAIL_TWO_CRIMES) == 2019
     assert judgment_year("không có năm") is None
+
+
+def test_is_appellate():
+    from vn_legal_graph.cases.vicsr import is_appellate
+
+    assert is_appellate("tòa án nhân dân tp hcm bản án số 197 2019 hs pt ngày 22 04 2019")
+    assert is_appellate("thành phần hội đồng xét xử phúc thẩm gồm có")
+    assert not is_appellate(DETAIL_DRUG)

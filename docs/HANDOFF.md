@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 35 passed
+pytest tests/ -v                                        # kỳ vọng: 48 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -109,8 +109,8 @@ Embedding **không** phải khâu quyết định cuối cùng. Truy vấn chạ
 |---|---|---|
 | 0 | Nền tảng: `config.py`, `llm.py` (client OpenAI-compatible, cache đĩa theo hash prompt), `embedding.py`, `prompts/vi.py` | ✅ Xong |
 | 1 | Tầng Law + Crime: `law/parse_blhs.py` → `judge_dep.py` → `link_guidance.py` → `build_law_crime.py`, CLI `scripts/build_law_layer.py` | ✅ Code xong và đã kiểm chứng. ⏳ `judge_dep` **chưa chạy thật** (chờ người dùng tự chạy với key) |
-| **2** | **Thu thập và làm sạch bản án** | 🔄 **Đang ở đây.** Đã có dữ liệu ViCSR (mục 8.1) và loader `vn_legal_graph/cases/vicsr.py` gắn lại nhãn tội danh. **Chờ người dùng quyết định phạm vi** (mục 9), vì ViCSR gần như không có án Chương XVI |
-| 3 | Tầng Case: trích đặc trưng, embedding, kNN, Louvain/Cluster, ráp graph hoàn chỉnh | Chưa làm |
+| 2 | Thu thập và làm sạch bản án | ✅ **Xong cho phạm vi thu hẹp** (mục 7.1): 257 án corpus + 40 án test, lấy từ ViCSR. Chương XVI (trừ Điều 173) chưa có dữ liệu |
+| **3** | **Tầng Case: trích đặc trưng, embedding, kNN, Louvain/Cluster, ráp graph hoàn chỉnh** | ⏸️ **Tiếp theo** |
 | 4 | Truy vấn (mục 4.2) và đo Recall@k của Điều luật và tội danh trên tập test | Chưa làm |
 | 5+ | Agent Researcher / Auditor / Adjudicator; mở rộng toàn bộ BLHS | Chưa làm |
 
@@ -143,6 +143,7 @@ Embedding **không** phải khâu quyết định cuối cùng. Truy vấn chạ
 - **Luôn viết test trước khi tin số liệu.** Lỗi Ð/đ được phát hiện nhờ đối chiếu số lượng điều.
 - **Văn bản hướng dẫn giữ nhãn "cần xác minh"** cho tới khi kiểm tra hiệu lực thật trên vbpl.vn.
 - Người dùng trả lời **"không có ưu tiên"** cho cách lấy bản án. Claude tự chọn hướng hợp lý, có giải thích.
+- **Dữ liệu bản án = ViCSR. Phạm vi thu hẹp còn 4 tội: 249, 251, 173, 247** (người dùng chọn ngày 2026-10-01: thu hẹp trước, mở rộng sau). Nhãn tội danh lấy lại từ câu tuyên án theo BLHS 2015, không dùng nhãn số gốc của ViCSR.
 
 ## 7. Phase 2 — đặc tả
 
@@ -185,6 +186,51 @@ Mỗi bản ghi có dạng:
 - Mọi bản ghi đã qua bước 2–6.
 - Kiểm tra bằng mắt ~20 bản ghi ngẫu nhiên: không còn lộ đáp án, không còn tên thật.
 - Hai tập corpus và test không trùng nhau.
+
+### 7.1. Kết quả Phase 2 (2026-10-01)
+
+**Phạm vi đã chốt với người dùng:** "thu hẹp trước, mở rộng sau". Chỉ dùng 4 tội ViCSR có đủ án: **249, 251, 173, 247**. Các tội còn lại của Chương XVI/XX bổ sung sau, bằng cách cào congbobanan.
+
+**Lệnh chạy** (không gọi LLM, ~30 giây):
+```bash
+.venv/bin/python scripts/build_cases.py
+# tuỳ chọn: --articles 249 251 173 247 --test-per-crime 10 --corpus-max-per-crime 100 --seed 42
+```
+Code: `vn_legal_graph/cases/build_cases.py`. Đầu ra nằm trong `data/processed/`, thư mục này không commit; muốn có lại thì chạy lại lệnh trên.
+
+**Pipeline thực tế:**
+- 10.001 án.
+- Loại trùng: −140.
+- Loại án phúc thẩm: −363. Lý do: phần nội dung của án phúc thẩm chép lại bản án sơ thẩm.
+- Gắn nhãn (`label_case`), giữ án có mọi tội nằm trong phạm vi:
+  - −428 không gắn được nhãn;
+  - −251 án ngoài phạm vi;
+  - −18 án có thêm tội ngoài phạm vi.
+- Lấy diễn biến:
+  - Dùng phần `noi_dung`. Nếu phần đó lỗi font hoặc ngắn hơn 40 từ thì dùng `case_sumary`. −112 án không có diễn biến dùng được.
+  - Cắt trước "cáo trạng số" / "kiểm sát viên" / "đề nghị hội đồng xét xử".
+  - Che "tội <tên>" thành "tội ××" và "điều N" thành "điều ××".
+- Lấy mẫu theo tội, tội hiếm làm trước: mỗi tội 10 án test, tối đa 100 án corpus.
+
+**Kết quả:**
+
+| Tội | Corpus | Test | Ghi chú |
+|---|---|---|---|
+| 249 | 159 | 18 | vượt trần 100 vì có án mang cả nhãn 249 và 251, được lấy theo 251 |
+| 251 | 100 | 12 | |
+| 173 | 41 | 10 | |
+| 247 | 16 | 10 | |
+
+Diễn biến dài trung vị ~600 từ, tối đa 4.602 từ. Kiểm tra tự động: không còn "tội <tên>" hay "điều <số>" nào lọt lại.
+
+**Schema bản ghi** (mở rộng so với mục 7):
+`id`, `nguon` ("ViCSR#<id>"), `nam`, `bi_cao`, `dien_bien`, `dien_bien_nguon` (`noi_dung` | `tom_tat`), `toi_danh` (tên đầy đủ), `dieu` ([249]), `dieu_khoan` (["249.1.c"]), `hinh_phat`, `cach_gan_nhan`, `nhan_goc` (nhãn số gốc của ViCSR, để đối chiếu), `vai_tro`.
+
+**Lệch so với đặc tả mục 7, có chủ đích:**
+- **Không tách theo bị cáo.** Việc này cần LLM (`CASE_SEG_PROMPT`). Mỗi bản án là một bản ghi, mang mọi tội của nó.
+- **Không ẩn danh thêm.** ViCSR đã được tòa công bố với tên viết tắt ("phùng thanh h").
+- **`hinh_phat` để `None`**, chưa trích xuất.
+- Diễn biến là chữ thường, không dấu câu (do ViCSR). Mô tả hành vi như "có hành vi tàng trữ trái phép chất ma túy" được giữ lại, vì đó là tình tiết chứ không phải đáp án.
 
 ## 8. Nguồn dữ liệu bản án — đã tìm hiểu
 
@@ -263,20 +309,17 @@ Mỗi bản ghi có dạng:
 
 ## 9. Việc tiếp theo, theo thứ tự
 
-1. **Người dùng chọn phạm vi** vì Chương XVI thiếu dữ liệu. Các phương án:
-   - (a) Giữ 2 chương, cào thêm án Chương XVI từ congbobanan.
-   - (b) Thu hẹp về các tội ViCSR có đủ án (249, 251, 247, 173) để chạy hết pipeline ngay, mở rộng sau.
-   - (c) Kết hợp: làm (b) trước, (a) song song.
-2. Viết `vn_legal_graph/cases/build_cases.py`:
-   - loại trùng;
-   - lấy phần diễn biến (`noi_dung` của `case_detail`; dự phòng bằng `case_sumary`);
-   - che đáp án ("phạm tội …", "điều N" trong diễn biến);
-   - lấy mẫu theo tội;
-   - chia corpus/test không trùng nhau;
-   - ghi `cases_vn.json` và `cases_vn_test.json` theo schema ở mục 7.
-
-   Kèm test.
-3. Người dùng tự chạy `judge_dep` thật cho 26 điều. Claude rà lại chất lượng các câu hỏi "Có … không?".
+1. **Phase 3, tầng Case.** Bước trích 4 nhóm đặc trưng cần LLM, nên:
+   - Claude viết `vn_legal_graph/cases/features.py`, dùng `GET_CASE_FEATURES_PROMPT` có sẵn trong `prompts/vi.py`, kèm `--dry-run` và test bằng LLM giả.
+   - **Người dùng tự chạy** với key thật, trên 257 + 40 án.
+   - Lưu ý chi phí: diễn biến trung vị ~600 từ. Nên cắt bớt đầu vào (bài gốc cắt 1.024 ký tự).
+2. Sau khi có đặc trưng: viết `vn_legal_graph/graph/graph_db.py` và `build.py`:
+   - embedding;
+   - cạnh `RELATES_TO_LAW` theo `dieu`, `RELATED_CRIME`;
+   - kNN top-3 → `SIMILAR_TO`;
+   - Louvain + PageRank → `Cluster`. Bước tóm tắt cluster cũng cần LLM, người dùng chạy.
+3. Người dùng tự chạy `judge_dep` thật cho các điều trong phạm vi. Claude rà lại chất lượng.
+4. **Mở rộng sau:** cào congbobanan cho Chương XVI và các tội ma túy hiếm. Lưu ý lỗi SSL ở mục 3.
 
 ## 10. Tham chiếu
 

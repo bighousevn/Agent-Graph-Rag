@@ -329,3 +329,13 @@ def judgment_year(detail: str) -> Optional[int]:
     head = detail[:400]
     m = re.search(r"bản án số \S+ (20\d\d)", head) or re.search(r"ngày \d+ \d+ (20\d\d)", head)
     return int(m.group(1)) if m else None
+
+
+APPELLATE_RE = re.compile(r"\bhs ?pt\b|hình sự phúc thẩm|xét xử phúc thẩm")
+
+
+def is_appellate(detail: str) -> bool:
+    """True for appeal judgments (phúc thẩm), detected from the header. Their
+    "nội dung vụ án" restates the first-instance verdict, so they are not
+    used as fact sources. ViCSR has ~369 of them."""
+    return bool(APPELLATE_RE.search(detail[:800]))
