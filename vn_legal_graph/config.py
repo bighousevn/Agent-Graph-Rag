@@ -83,7 +83,8 @@ class AppConfig:
 
         llm = LLMConfig(
             base_url=_env("LLM_BASE_URL", LLMConfig.base_url),
-            api_key=_env("LLM_API_KEY", "") or "",
+            # LLM_API_KEY wins; OPENAI_API_KEY is accepted as the usual name.
+            api_key=_env("LLM_API_KEY", "") or _env("OPENAI_API_KEY", "") or "",
             model=_env("LLM_MODEL", LLMConfig.model),
             temperature=_env_float("LLM_TEMPERATURE", LLMConfig.temperature),
             max_tokens=_env_int("LLM_MAX_TOKENS", LLMConfig.max_tokens),
