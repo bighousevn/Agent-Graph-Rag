@@ -117,7 +117,7 @@ Embedding **không** phải khâu quyết định cuối cùng. Truy vấn chạ
 | 0 | Nền tảng: `config.py`, `llm.py` (client OpenAI-compatible, cache đĩa theo hash prompt), `embedding.py`, `prompts/vi.py` | ✅ Xong |
 | 1 | Tầng Law + Crime: `law/parse_blhs.py` → `judge_dep.py` → `link_guidance.py` → `build_law_crime.py`, CLI `scripts/build_law_layer.py` | ✅ Code xong và đã kiểm chứng. ⏳ `judge_dep` **chưa chạy thật** (chờ người dùng tự chạy với key) |
 | 2 | Thu thập và làm sạch bản án | ✅ **Xong cho phạm vi thu hẹp** (mục 7.1): 257 án corpus + 40 án test, lấy từ ViCSR. Chương XVI (trừ Điều 173) chưa có dữ liệu |
-| **3** | **Tầng Case: trích đặc trưng, embedding, kNN, Louvain/Cluster, ráp graph hoàn chỉnh** | 🔄 **Code xong và đã chạy thử toàn bộ pipeline. Chờ người dùng chạy 2 bước LLM** (mục 9) |
+| **3** | **Tầng Case: trích đặc trưng, embedding, kNN, Louvain/Cluster, ráp graph hoàn chỉnh** | 🔄 **Đặc trưng đã chạy thật (297 án). Graph đã dựng; chỉ còn thiếu node Cluster** (chờ người dùng chạy `summarize_clusters.py`) |
 | 4 | Truy vấn (mục 4.2) và đo Recall@k của Điều luật và tội danh trên tập test | Chưa làm |
 | 5+ | Agent Researcher / Auditor / Adjudicator; mở rộng toàn bộ BLHS | Chưa làm |
 
@@ -372,6 +372,20 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
 - → **Prompt v4:** ghi đúng con số văn bản nêu, không tự đặt khoảng.
 - → `sanitize_features()` **lọc bằng code** chi tiết cá nhân (sinh năm, quan hệ gia đình) và biển số xe sau khi LLM trả về. Cách này chắc hơn sửa prompt thêm.
 - → Kết luận: đủ tốt để chạy toàn bộ (~447k token). Sau khi chạy xong, đọc báo cáo kiểm tra và lấy mẫu vài án để đọc tay.
+
+**Chạy toàn bộ (2026-10-02, prompt v4, `gpt-4o-mini`):**
+- 297/297 án đọc được JSON, 0 án thiếu hành vi phạm tội.
+- Bộ kiểm tra tự động chỉ gắn cờ 1 án (4360). Đó là lỗi diễn đạt: "tài sản trị giá 0,8428 gam methamphetamine", con số có thật trong văn bản.
+- Đọc tay 5 án ngẫu nhiên: đều đúng trọng tâm.
+- Mô tả đặc trưng dài trung vị 47 từ (min 8, max 102).
+
+**Graph dựng từ đặc trưng thật** (`outputs/hierargraph.pkl`, 38 giây trên CPU):
+- 26 Law, 26 Crime, 257 Case; 316 cạnh `RELATES_TO_LAW`, 771 cạnh `SIMILAR_TO`.
+- **Chất lượng kNN:** 92,2% cạnh `SIMILAR_TO` nối 2 án có chung tội, so với 53,1% nếu ghép ngẫu nhiên. Theo tội: 247 đạt 100%, 173 đạt 97%, 249 đạt 94%, 251 đạt 90%.
+- **10 cụm Louvain** (11–42 án):
+  - Cụm 9 thuần Điều 247 (16/16 án).
+  - Cụm 6 phần lớn là Điều 173 (35/37), cộng các án vừa trộm cắp vừa ma túy.
+  - Án 249 và 251 chia ra 7 cụm trộn lẫn nhau. Điều này dễ hiểu, vì hành vi gần nhau và có 59 án mang cả hai nhãn.
 
 ### 9.2. Phase 3 — các quyết định và kết quả chạy thử
 
