@@ -33,7 +33,7 @@ Bạn là một trợ lý AI pháp lý. Nhiệm vụ của bạn là xử lý ph
 Giải thích các nhóm:
 - Nhân thân bị cáo: trích các đặc điểm pháp lý liên quan đến bị cáo, như độ tuổi, tiền án tiền sự, nghề nghiệp; tránh nêu tuổi cụ thể hoặc tên đơn vị công tác cụ thể. Tên bị cáo không quan trọng.
 - Hành vi phạm tội: trích loại hành vi và phương thức phạm tội có ý nghĩa pháp lý; tránh nêu thời gian, địa điểm cụ thể.
-- Đặc điểm đối tượng/tài sản: trích đặc điểm loại của đối tượng hoặc tài sản bị xâm phạm, như tính chất tài sản, loại địa điểm, loại chất ma túy; tránh nêu tên địa danh cụ thể. Giá trị tài sản hoặc khối lượng ma túy ghi theo khoảng, đúng như văn bản nêu, ví dụ "tài sản trị giá từ 2 đến dưới 50 triệu đồng", "heroine khối lượng dưới 1 gam".
+- Đặc điểm đối tượng/tài sản: trích đặc điểm loại của đối tượng hoặc tài sản bị xâm phạm, như tính chất tài sản, loại địa điểm, loại chất ma túy; tránh nêu tên địa danh cụ thể. Giá trị tài sản hoặc khối lượng ma túy ghi đúng con số văn bản nêu, ví dụ "tài sản trị giá 9.775.000 đồng", "heroine khối lượng 0,226 gam"; không tự đặt khoảng.
 - Lỗi và thái độ: trích mô tả pháp lý về ý thức chủ quan và thái độ ăn năn, như cố ý/vô ý, tự thú, thành khẩn khai báo, khắc phục hậu quả.
 
 Nguyên tắc bắt buộc:
@@ -50,7 +50,7 @@ Ví dụ đầu ra (chỉ để tham khảo, đầu ra thực tế phải dựa 
 {{
 "defendant_info": ["đã thành niên", "có tiền án", "cán bộ nhà nước"],
 "criminal_acts": ["trộm cắp", "đột nhập nơi ở"],
-"victim_property_details": ["nhà ở tư nhân", "xe mô tô", "tài sản trị giá từ 2 đến dưới 50 triệu đồng"],
+"victim_property_details": ["nhà ở tư nhân", "xe mô tô", "tài sản trị giá 9.775.000 đồng"],
 "intent_remorse": ["lỗi cố ý trực tiếp"]
 }}
 

@@ -69,6 +69,22 @@ def parse_features(raw: str) -> Optional[Dict[str, List[str]]]:
     return out
 
 
+# Items the prompt forbids but the LLM still writes now and then (trial 3:
+# "sinh năm 1987" in 3/32 cases, a licence plate). Removed in code, which
+# is reliable where another prompt tweak is not.
+_DROP_RES = {
+    "defendant_info": re.compile(r"sinh năm|\bvợ\b|\bchồng\b|con của|em gái|em trai|anh trai|chị gái|\bbố\b|\bmẹ\b"),
+    "victim_property_details": re.compile(r"biển kiểm soát|biển số|\bbks\b"),
+}
+
+
+def sanitize_features(features: Dict[str, List[str]]) -> Dict[str, List[str]]:
+    out = dict(features)
+    for key, pattern in _DROP_RES.items():
+        out[key] = [x for x in features.get(key, []) if not pattern.search(x)]
+    return out
+
+
 def concat_feature_description(features: Dict[str, List[str]]) -> str:
     """Text embedded for a Case node and for a query. Empty groups are left
     out, as in the original."""
@@ -96,6 +112,8 @@ def annotate_cases(
     for i, case in enumerate(cases):
         hint = case.get("toi_danh") if use_crime_hint and case.get("vai_tro") == "corpus" else None
         features = parse_features(generate(build_prompt(case["dien_bien"], hint, max_chars)))
+        if features is not None:
+            features = sanitize_features(features)
         row = dict(case)
         row["dac_trung"] = features or {k: [] for k in FEATURE_KEYS}
         row["dac_trung_loi"] = features is None

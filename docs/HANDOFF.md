@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 74 passed
+pytest tests/ -v                                        # kỳ vọng: 76 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -320,8 +320,7 @@ Diễn biến dài trung vị ~600 từ, tối đa 4.602 từ. Kiểm tra tự �
 
 ```bash
 # (a) Đặc trưng án: ~400k token. Thử trước, đọc kết quả, rồi chạy hết.
-.venv/bin/python scripts/extract_case_features.py --per-crime 2   # ~49k token, đủ các tội
-.venv/bin/python scripts/extract_case_features.py
+.venv/bin/python scripts/extract_case_features.py   # ~447k token; in báo cáo kiểm tra ở cuối
 
 # (b) Dựng graph (không LLM; lần đầu tải model ~540 MB, ~1 phút trên CPU)
 .venv/bin/python scripts/build_graph.py
@@ -365,6 +364,14 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
   - cấm ghi tên người;
   - bỏ "giá trị lớn" và "tự thú" khỏi phần ví dụ.
 - Thêm `audit_features()` và `extract_case_features.py --audit` (không gọi LLM) để gắn cờ các đặc trưng không có căn cứ trong văn bản. Đây là bộ lọc theo từ khoá, chỉ dùng để chỉ ra án cần xem lại.
+
+**Lần chạy thử 3 (prompt v3, 32 án):**
+- Bộ kiểm tra tự động: corpus 0 cờ; test có 3 án bị cờ `chi_tiet_ca_nhan` ("sinh năm …"). Không còn "giá trị lớn".
+- **Đối chiếu tay khối lượng ma túy với văn bản:** khớp ở 13/13 án kiểm tra, kể cả các con số tổng cộng (2078: 0,155 + 0,038 = 0,193 gam).
+- **Giá trị tài sản:** LLM tự đặt ranh giới khoảng (6150: "3 đến dưới 15 triệu" cho giá trị thật 13 triệu); có án lẫn giá mua ma túy với giá trị tài sản (440).
+- → **Prompt v4:** ghi đúng con số văn bản nêu, không tự đặt khoảng.
+- → `sanitize_features()` **lọc bằng code** chi tiết cá nhân (sinh năm, quan hệ gia đình) và biển số xe sau khi LLM trả về. Cách này chắc hơn sửa prompt thêm.
+- → Kết luận: đủ tốt để chạy toàn bộ (~447k token). Sau khi chạy xong, đọc báo cáo kiểm tra và lấy mẫu vài án để đọc tay.
 
 ### 9.2. Phase 3 — các quyết định và kết quả chạy thử
 

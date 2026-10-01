@@ -117,3 +117,27 @@ def test_audit_features_clean_row():
         },
     }
     assert audit_features(row) == []
+
+
+def test_sanitize_drops_personal_details_and_plates():
+    from vn_legal_graph.cases.features import sanitize_features
+
+    f = {
+        "defendant_info": ["đã thành niên", "sinh năm 1987", "có em gái"],
+        "criminal_acts": ["trộm cắp"],
+        "victim_property_details": ["xe mô tô", "biển kiểm soát 74d1 075 67"],
+        "intent_remorse": [],
+    }
+    out = sanitize_features(f)
+    assert out["defendant_info"] == ["đã thành niên"]
+    assert out["victim_property_details"] == ["xe mô tô"]
+    assert f["defendant_info"][1] == "sinh năm 1987"  # input not mutated
+
+
+def test_annotate_applies_sanitize():
+    out = annotate_cases(
+        [{"id": "a", "dien_bien": "d", "toi_danh": [], "vai_tro": "test"}],
+        lambda p: '{"defendant_info": ["sinh năm 2000", "có tiền án"], "criminal_acts": ["tàng trữ"]}',
+        use_crime_hint=False,
+    )
+    assert out[0]["dac_trung"]["defendant_info"] == ["có tiền án"]
