@@ -8,7 +8,7 @@ which never loads .env.
     python scripts/extract_case_features.py --dry-run
 
     # Try a few cases first and read the output:
-    python scripts/extract_case_features.py --limit 5
+    python scripts/extract_case_features.py --per-crime 2
 
     # Full run (corpus + test):
     python scripts/extract_case_features.py
@@ -43,6 +43,10 @@ def main() -> None:
     parser.add_argument("--data-dir", default="data/processed")
     parser.add_argument("--roles", nargs="*", default=["corpus", "test"], choices=list(INPUTS))
     parser.add_argument("--limit", type=int, default=None, help="Only the first N cases of each file.")
+    parser.add_argument(
+        "--per-crime", type=int, default=None,
+        help="Only the first N cases per crime of each file (a trial that covers every crime).",
+    )
     parser.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
     parser.add_argument("--no-crime-hint", action="store_true")
     parser.add_argument("--dotenv-path", default=".env")
@@ -55,6 +59,15 @@ def main() -> None:
         src, dst = INPUTS[role]
         with open(os.path.join(args.data_dir, src), encoding="utf-8") as f:
             cases = json.load(f)
+        if args.per_crime:
+            seen = {}
+            picked = []
+            for c in cases:
+                key = tuple(c["dieu"])
+                if seen.get(key, 0) < args.per_crime:
+                    picked.append(c)
+                    seen[key] = seen.get(key, 0) + 1
+            cases = picked
         if args.limit:
             cases = cases[: args.limit]
         jobs.append((role, cases, os.path.join(args.data_dir, dst)))

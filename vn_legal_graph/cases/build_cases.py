@@ -29,13 +29,15 @@ import re
 from collections import defaultdict
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from .vicsr import CRIME_NAME_ALIASES, LawEntry, _norm_name
+from .vicsr import CRIME_NAME_ALIASES, LawEntry, _match_name, _norm_name
 
 MIN_FACT_WORDS = 40
 
 # Where the facts end and the indictment / prosecutor part begins.
 PROSECUTION_RES = (
     re.compile(r"(?:tại |theo )?(?:bản )?cáo trạng số"),
+    # "viện kiểm sát ... truy tố các bị cáo ... về tội ××", without "cáo trạng số"
+    re.compile(r"(?:viện kiểm sát|vksnd)(?: \S+){0,10}? truy tố (?:\S+ ){0,12}?về (?:các )?tội"),
     re.compile(r"(?:tại phần tranh luận )?(?:đại diện viện kiểm sát|kiểm sát viên)"),
     re.compile(r"đề nghị hội đồng xét xử"),
 )
@@ -78,12 +80,14 @@ def cut_before_prosecution(text: str, min_words: int = MIN_FACT_WORDS) -> str:
     marker in the first ``min_words`` words is ignored (e.g. the opening
     "bị viện kiểm sát ... truy tố về hành vi phạm tội như sau")."""
     words_before = lambda pos: len(text[:pos].split())
-    cut = text
-    for pattern in PROSECUTION_RES:
-        hit = next((m for m in pattern.finditer(text) if words_before(m.start()) >= min_words), None)
-        if hit is not None:
-            cut = text[: hit.start()]
-            break
+    # Earliest marker over all patterns, not the first pattern that matches.
+    starts = [
+        m.start()
+        for pattern in PROSECUTION_RES
+        for m in pattern.finditer(text)
+        if words_before(m.start()) >= min_words
+    ]
+    cut = text[: min(starts)] if starts else text
     words = cut.split()
     while words and words[-1] in TRAILING_CONNECTORS:
         words.pop()
@@ -101,6 +105,19 @@ def mask_leaks(text: str, crime_names: Sequence[str]) -> str:
     ``text`` must already be in ``_norm_name`` form."""
     pattern = re.compile(r"\btội (?:" + "|".join(re.escape(n) for n in crime_names) + r")\b")
     text = pattern.sub("tội ××", text)
+    # OCR-damaged names ("tội ta ng trư trái phép chất ma túy") escape the
+    # exact pattern; mask those through the fuzzy matcher used for labels.
+    out, pos = [], 0
+    for m in re.finditer(r"\btội (?!××)", text):
+        if m.start() < pos:
+            continue
+        hit = _match_name(text[m.end():], list(crime_names))
+        if hit is not None and hit[1]:
+            end = m.end() + len(hit[0])
+            out.append(text[pos : m.end()] + "××")
+            pos = end
+    out.append(text[pos:])
+    text = "".join(out)
     return ARTICLE_RE.sub("điều ××", text)
 
 

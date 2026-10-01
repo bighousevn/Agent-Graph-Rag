@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 66 passed
+pytest tests/ -v                                        # kỳ vọng: 72 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -319,8 +319,8 @@ Diễn biến dài trung vị ~600 từ, tối đa 4.602 từ. Kiểm tra tự �
 ### 9.1. Người dùng chạy (cần key), theo đúng thứ tự
 
 ```bash
-# (a) Đặc trưng án: ~400k token. Thử 5 án trước, đọc kết quả, rồi chạy hết.
-.venv/bin/python scripts/extract_case_features.py --limit 5
+# (a) Đặc trưng án: ~400k token. Thử trước, đọc kết quả, rồi chạy hết.
+.venv/bin/python scripts/extract_case_features.py --per-crime 2   # ~49k token, đủ các tội
 .venv/bin/python scripts/extract_case_features.py
 
 # (b) Dựng graph (không LLM; lần đầu tải model ~540 MB, ~1 phút trên CPU)
@@ -337,6 +337,23 @@ Diễn biến dài trung vị ~600 từ, tối đa 4.602 từ. Kiểm tra tự �
 ```
 
 Claude được tự chạy các bước không cần key: `--dry-run`, `build_graph.py`, `build_cases.py`, `pytest`.
+
+**Model:** lấy từ `LLM_MODEL` trong `.env`; mặc định `gpt-4o-mini`. Key: `LLM_API_KEY`, hoặc `OPENAI_API_KEY` (người dùng đang dùng biến này).
+
+**Quyền chạy:** bộ phân loại an toàn của Claude Code (chế độ auto) **chặn Claude chạy các lệnh gọi LLM**, dù người dùng đã bảo chạy. Người dùng tự chạy, hoặc thêm quy tắc `allow` cho đúng các script đó vào `.claude/settings.json`.
+
+**Lần chạy thử 1 (2026-10-02, `--limit 5`, 10 án, đều là Điều 247) phát hiện LLM bịa thông tin:**
+- "không thành khẩn khai báo" ở 6/10 án trong khi diễn biến không hề nói tới việc khai báo. Phần diễn biến bị cắt trước đoạn tại phiên tòa, nên LLM tự đoán.
+- "giá trị lớn" chép từ câu ví dụ trong prompt.
+- Có chi tiết cá nhân lọt vào ("sinh năm 1968", "có vợ").
+
+→ Đã thêm vào `GET_CASE_FEATURES_PROMPT` một mục "Nguyên tắc bắt buộc": chỉ trích những gì văn bản nêu, không nêu thì để mảng rỗng. **Đây là chỗ khác với prompt gốc.** Cần chạy thử lại (`--per-crime 2`) và đọc kết quả trước khi chạy toàn bộ.
+
+**Sửa bộ cắt diễn biến sau lần thử 1:**
+- Cắt tại marker **sớm nhất** trong mọi mẫu. Trước đó code dừng ở mẫu đầu tiên có khớp, nên án 362 giữ lại câu "đại diện viện kiểm sát … truy tố".
+- Thêm mẫu "viện kiểm sát … truy tố … về tội".
+- Che cả tên tội bị vỡ chữ do OCR, bằng bộ khớp gần đúng.
+- Còn 4/297 bản ghi giữ câu truy tố, nhưng tên tội và số điều đã được che: 517, 653, 2625 có câu này nằm trong 40 từ đầu; 4217 có chữ bị vỡ.
 
 ### 9.2. Phase 3 — các quyết định và kết quả chạy thử
 

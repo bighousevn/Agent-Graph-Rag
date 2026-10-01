@@ -36,6 +36,11 @@ Giải thích các nhóm:
 - Đặc điểm đối tượng/tài sản: trích đặc điểm loại của đối tượng hoặc tài sản bị xâm phạm, như tính chất tài sản, loại địa điểm; tránh nêu tên địa danh cụ thể hoặc số tiền cụ thể (có thể khái quát thành "giá trị lớn" v.v.).
 - Lỗi và thái độ: trích mô tả pháp lý về ý thức chủ quan và thái độ ăn năn, như cố ý/vô ý, tự thú, thành khẩn khai báo, khắc phục hậu quả.
 
+Nguyên tắc bắt buộc:
+- Chỉ trích những gì văn bản thực sự nêu. Nếu văn bản không nói gì về một nhóm, để mảng rỗng []; không suy đoán. Ví dụ: văn bản không nhắc tới việc khai báo thì không được ghi "thành khẩn khai báo" hay "không thành khẩn khai báo".
+- Chỉ dùng các khái quát như "giá trị lớn" khi văn bản có nêu giá trị tài sản hoặc số tiền.
+- Không ghi năm sinh, tình trạng hôn nhân, quan hệ gia đình hay chi tiết cá nhân không có ý nghĩa pháp lý.
+
 Yêu cầu định dạng JSON:
 - Dùng dấu ngoặc kép cho khóa và giá trị chuỗi.
 - Mỗi khóa tương ứng một nhóm, giá trị là một mảng chuỗi chứa các từ khóa trích được (nếu nhóm không có từ khóa nào, dùng mảng rỗng []).

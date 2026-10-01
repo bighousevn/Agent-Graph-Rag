@@ -47,6 +47,14 @@ def test_extract_facts_skips_legacy_font_text():
     assert source == "tom_tat"
 
 
+def test_cut_at_truy_to_ve_toi_without_cao_trang():
+    text = (
+        FACTS + " viện kiểm sát nhân dân huyện văn quan truy tố các bị cáo đinh văn b và đinh thị t "
+        "về tội trồng cây thuốc phiện theo điểm c khoản 1 điều 247"
+    )
+    assert cut_before_prosecution(text) == FACTS
+
+
 def test_cut_falls_back_to_prosecutor_marker():
     text = FACTS + " kiểm sát viên đề nghị tuyên bố bị cáo phạm tội trộm cắp tài sản"
     assert cut_before_prosecution(text) == FACTS
@@ -101,3 +109,17 @@ def test_split_by_crime_disjoint_and_capped():
 def test_split_by_crime_is_deterministic():
     case_crimes = {i: [249] for i in range(50)}
     assert split_by_crime(case_crimes, 5, 10, seed=1) == split_by_crime(case_crimes, 5, 10, seed=1)
+
+
+def test_cut_uses_earliest_marker_across_patterns():
+    # "cáo trạng số" (first pattern) appears after "đại diện viện kiểm sát".
+    text = FACTS + " tại phiên tòa đại diện viện kiểm sát giữ nguyên quan điểm theo cáo trạng số 5"
+    assert cut_before_prosecution(text) == FACTS + " tại phiên tòa"
+
+
+def test_mask_ocr_damaged_crime_name():
+    out = mask_leaks("truy tố bị cáo về tội ta ng trư trái phép chất ma túy theo quy định", NAMES)
+    assert "về tội ××" in out
+    assert "trái phép chất ma túy" not in out
+    # unrelated phrases after "tội" stay
+    assert mask_leaks("bắt người phạm tội quả tang", NAMES) == "bắt người phạm tội quả tang"
