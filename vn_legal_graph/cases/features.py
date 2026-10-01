@@ -16,6 +16,7 @@ key stays in the user's .env.
 from __future__ import annotations
 
 import json
+import re
 from typing import Callable, Dict, Iterable, List, Optional, Sequence
 
 from ..prompts.vi import (
@@ -103,3 +104,30 @@ def annotate_cases(
         if on_progress:
             on_progress(i + 1)
     return out
+
+
+# ---- audit ---------------------------------------------------------------
+# Checks for the hallucinations seen in the trial runs: features the fact
+# text does not support. They are heuristics (keyword presence), meant to
+# flag cases for a human look, not to prove an error.
+
+_REMORSE_RE = re.compile(r"thành khẩn|khai nhận|khai báo|ăn năn|thừa nhận|tự thú|đầu thú|khắc phục|bồi thường")
+_VALUE_IN_TEXT_RE = re.compile(r"trị giá|giá trị|định giá|\d+ ?(?:000|triệu)")
+_VALUE_IN_FEATURE_RE = re.compile(r"trị giá|triệu đồng|nghìn đồng")
+_GENERIC_VALUE_RE = re.compile(r"giá trị (?:lớn|nhỏ|rất lớn|đặc biệt lớn)")
+_PERSONAL_RE = re.compile(r"sinh năm|\bvợ\b|\bchồng\b|con của|em gái|em trai|anh trai|chị gái|\bbố\b|\bmẹ\b")
+
+
+def audit_features(row: Dict) -> List[str]:
+    """Flags for one case: which feature groups look unsupported."""
+    f, text = row["dac_trung"], row["dien_bien"]
+    flags = []
+    if any(_REMORSE_RE.search(x) for x in f["intent_remorse"]) and not _REMORSE_RE.search(text):
+        flags.append("thai_do_khong_co_trong_van_ban")
+    if any(_GENERIC_VALUE_RE.search(x) for x in f["victim_property_details"]):
+        flags.append("gia_tri_chung_chung")
+    if any(_VALUE_IN_FEATURE_RE.search(x) for x in f["victim_property_details"]) and not _VALUE_IN_TEXT_RE.search(text):
+        flags.append("gia_tri_khong_co_trong_van_ban")
+    if any(_PERSONAL_RE.search(x) for x in f["defendant_info"]):
+        flags.append("chi_tiet_ca_nhan")
+    return flags

@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 72 passed
+pytest tests/ -v                                        # kỳ vọng: 74 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -354,6 +354,17 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
 - Thêm mẫu "viện kiểm sát … truy tố … về tội".
 - Che cả tên tội bị vỡ chữ do OCR, bằng bộ khớp gần đúng.
 - Còn 4/297 bản ghi giữ câu truy tố, nhưng tên tội và số điều đã được che: 517, 653, 2625 có câu này nằm trong 40 từ đầu; 4217 có chữ bị vỡ.
+
+**Lần chạy thử 2 (`--per-crime 2`, 32 án), sau khi thêm "Nguyên tắc bắt buộc":**
+- "không thành khẩn khai báo" bịa ra: từ 6/10 xuống 0. Thái độ không có trong văn bản: còn 1/32.
+- Nhưng **"giá trị lớn" xuất hiện ở 20/32 án**, phần lớn là án ma túy; 9 án trong đó văn bản không hề nêu giá trị. Thêm 3 án có chi tiết cá nhân, trong đó 1 án lộ cả họ tên người thân.
+- Nguyên nhân: cả phần ví dụ lẫn phần giải thích trong prompt đều gợi ý "giá trị lớn". Bài gốc làm vậy vì "数额较大" là thuật ngữ pháp lý của Trung Quốc, còn BLHS Việt Nam định khung theo khoảng giá trị (Điều 173) hoặc khối lượng ma túy (Điều 249).
+- → **Prompt v3:**
+  - ghi giá trị hoặc khối lượng **theo khoảng, đúng như văn bản nêu**;
+  - cấm các cụm chung chung như "giá trị lớn";
+  - cấm ghi tên người;
+  - bỏ "giá trị lớn" và "tự thú" khỏi phần ví dụ.
+- Thêm `audit_features()` và `extract_case_features.py --audit` (không gọi LLM) để gắn cờ các đặc trưng không có căn cứ trong văn bản. Đây là bộ lọc theo từ khoá, chỉ dùng để chỉ ra án cần xem lại.
 
 ### 9.2. Phase 3 — các quyết định và kết quả chạy thử
 

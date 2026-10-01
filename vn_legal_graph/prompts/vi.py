@@ -33,13 +33,13 @@ Bạn là một trợ lý AI pháp lý. Nhiệm vụ của bạn là xử lý ph
 Giải thích các nhóm:
 - Nhân thân bị cáo: trích các đặc điểm pháp lý liên quan đến bị cáo, như độ tuổi, tiền án tiền sự, nghề nghiệp; tránh nêu tuổi cụ thể hoặc tên đơn vị công tác cụ thể. Tên bị cáo không quan trọng.
 - Hành vi phạm tội: trích loại hành vi và phương thức phạm tội có ý nghĩa pháp lý; tránh nêu thời gian, địa điểm cụ thể.
-- Đặc điểm đối tượng/tài sản: trích đặc điểm loại của đối tượng hoặc tài sản bị xâm phạm, như tính chất tài sản, loại địa điểm; tránh nêu tên địa danh cụ thể hoặc số tiền cụ thể (có thể khái quát thành "giá trị lớn" v.v.).
+- Đặc điểm đối tượng/tài sản: trích đặc điểm loại của đối tượng hoặc tài sản bị xâm phạm, như tính chất tài sản, loại địa điểm, loại chất ma túy; tránh nêu tên địa danh cụ thể. Giá trị tài sản hoặc khối lượng ma túy ghi theo khoảng, đúng như văn bản nêu, ví dụ "tài sản trị giá từ 2 đến dưới 50 triệu đồng", "heroine khối lượng dưới 1 gam".
 - Lỗi và thái độ: trích mô tả pháp lý về ý thức chủ quan và thái độ ăn năn, như cố ý/vô ý, tự thú, thành khẩn khai báo, khắc phục hậu quả.
 
 Nguyên tắc bắt buộc:
 - Chỉ trích những gì văn bản thực sự nêu. Nếu văn bản không nói gì về một nhóm, để mảng rỗng []; không suy đoán. Ví dụ: văn bản không nhắc tới việc khai báo thì không được ghi "thành khẩn khai báo" hay "không thành khẩn khai báo".
-- Chỉ dùng các khái quát như "giá trị lớn" khi văn bản có nêu giá trị tài sản hoặc số tiền.
-- Không ghi năm sinh, tình trạng hôn nhân, quan hệ gia đình hay chi tiết cá nhân không có ý nghĩa pháp lý.
+- Chỉ ghi giá trị tài sản hoặc khối lượng ma túy khi văn bản có nêu con số; không dùng các cụm chung chung như "giá trị lớn".
+- Không ghi tên người, năm sinh, tình trạng hôn nhân, quan hệ gia đình hay chi tiết cá nhân không có ý nghĩa pháp lý.
 
 Yêu cầu định dạng JSON:
 - Dùng dấu ngoặc kép cho khóa và giá trị chuỗi.
@@ -50,8 +50,8 @@ Ví dụ đầu ra (chỉ để tham khảo, đầu ra thực tế phải dựa 
 {{
 "defendant_info": ["đã thành niên", "có tiền án", "cán bộ nhà nước"],
 "criminal_acts": ["trộm cắp", "đột nhập nơi ở"],
-"victim_property_details": ["nhà ở tư nhân", "giá trị lớn"],
-"intent_remorse": ["lỗi cố ý trực tiếp", "tự thú"]
+"victim_property_details": ["nhà ở tư nhân", "xe mô tô", "tài sản trị giá từ 2 đến dưới 50 triệu đồng"],
+"intent_remorse": ["lỗi cố ý trực tiếp"]
 }}
 
 Đảm bảo chỉ xuất ra đối tượng JSON.

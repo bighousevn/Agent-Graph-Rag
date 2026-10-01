@@ -27,7 +27,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from vn_legal_graph.cases.features import DEFAULT_MAX_CHARS, annotate_cases, build_prompt
+import collections
+
+from vn_legal_graph.cases.features import DEFAULT_MAX_CHARS, annotate_cases, audit_features, build_prompt
 
 INPUTS = {
     "corpus": ("cases_vn.json", "cases_vn_features.json"),
@@ -36,6 +38,18 @@ INPUTS = {
 
 # Rough: Vietnamese text runs ~3-4 characters per token on common tokenizers.
 CHARS_PER_TOKEN = 3.5
+
+
+def print_audit(role, rows) -> None:
+    flagged = collections.defaultdict(list)
+    for r in rows:
+        for flag in audit_features(r):
+            flagged[flag].append(r["id"])
+    print(f"  kiểm tra đặc trưng ({role}, {len(rows)} án):")
+    if not flagged:
+        print("    không có án nào bị gắn cờ")
+    for flag, ids in sorted(flagged.items()):
+        print(f"    {flag}: {len(ids)} {ids[:6]}")
 
 
 def main() -> None:
@@ -51,9 +65,20 @@ def main() -> None:
     parser.add_argument("--no-crime-hint", action="store_true")
     parser.add_argument("--dotenv-path", default=".env")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--audit", action="store_true",
+        help="Only audit the existing output files for unsupported features. No LLM, no .env.",
+    )
     args = parser.parse_args()
 
     use_hint = not args.no_crime_hint
+    if args.audit:
+        for role in args.roles:
+            path = os.path.join(args.data_dir, INPUTS[role][1])
+            with open(path, encoding="utf-8") as f:
+                print_audit(role, json.load(f))
+        return
+
     jobs = []
     for role in args.roles:
         src, dst = INPUTS[role]
@@ -104,6 +129,7 @@ def main() -> None:
         print(f"{role}: {len(rows)} án -> {dst}")
         print(f"  không đọc được JSON: {len(failed)} {failed[:5]}")
         print(f"  không có 'hành vi phạm tội' (bài gốc loại các án này khỏi graph): {len(no_acts)} {no_acts[:5]}")
+        print_audit(role, rows)
 
 
 if __name__ == "__main__":

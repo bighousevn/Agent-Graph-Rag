@@ -82,3 +82,38 @@ def test_annotate_marks_parse_failures():
     )
     assert out[0]["dac_trung_loi"] is True
     assert out[0]["mo_ta_dac_trung"] == ""
+
+
+def test_audit_features_flags():
+    from vn_legal_graph.cases.features import audit_features
+
+    row = {
+        "dien_bien": "bị cáo lén lút lấy chiếc xe máy rồi bỏ đi",
+        "dac_trung": {
+            "defendant_info": ["đã thành niên", "sinh năm 1961"],
+            "criminal_acts": ["trộm cắp"],
+            "victim_property_details": ["xe mô tô", "giá trị lớn", "tài sản trị giá 30 triệu đồng"],
+            "intent_remorse": ["thành khẩn khai báo"],
+        },
+    }
+    assert audit_features(row) == [
+        "thai_do_khong_co_trong_van_ban",
+        "gia_tri_chung_chung",
+        "gia_tri_khong_co_trong_van_ban",
+        "chi_tiet_ca_nhan",
+    ]
+
+
+def test_audit_features_clean_row():
+    from vn_legal_graph.cases.features import audit_features
+
+    row = {
+        "dien_bien": "bị cáo khai nhận đã lấy xe máy trị giá 30 000 000 đồng theo kết luận định giá",
+        "dac_trung": {
+            "defendant_info": ["đã thành niên"],
+            "criminal_acts": ["trộm cắp"],
+            "victim_property_details": ["xe mô tô", "tài sản trị giá từ 2 đến dưới 50 triệu đồng"],
+            "intent_remorse": ["khai nhận"],
+        },
+    }
+    assert audit_features(row) == []
