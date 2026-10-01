@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 76 passed
+pytest tests/ -v                                        # kỳ vọng: 82 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -118,7 +118,7 @@ Embedding **không** phải khâu quyết định cuối cùng. Truy vấn chạ
 | 1 | Tầng Law + Crime: `law/parse_blhs.py` → `judge_dep.py` → `link_guidance.py` → `build_law_crime.py`, CLI `scripts/build_law_layer.py` | ✅ Code xong và đã kiểm chứng. ⏳ `judge_dep` **chưa chạy thật** (chờ người dùng tự chạy với key) |
 | 2 | Thu thập và làm sạch bản án | ✅ **Xong cho phạm vi thu hẹp** (mục 7.1): 257 án corpus + 40 án test, lấy từ ViCSR. Chương XVI (trừ Điều 173) chưa có dữ liệu |
 | 3 | Tầng Case: trích đặc trưng, embedding, kNN, Louvain/Cluster, ráp graph hoàn chỉnh | ✅ **Xong** (2026-10-02). `outputs/hierargraph.pkl` có đủ 4 loại node. Còn vấn đề tóm tắt cụm (mục 9.2) |
-| **4** | **Truy vấn (mục 4.2) và đo Recall@k của Điều luật và tội danh trên tập test** | ⏸️ **Tiếp theo** |
+| **4** | **Truy vấn (mục 4.2) và đo Recall@k của Điều luật và tội danh trên tập test** | 🔄 **Bước 1 xong:** baseline không dùng LLM (mục 9.3). Tiếp theo là các bước LLM |
 | 5+ | Agent Researcher / Auditor / Adjudicator; mở rộng toàn bộ BLHS | Chưa làm |
 
 ### Kết quả đã kiểm chứng ở Phase 1 (file thật `data/raw/law/100_2015_QH13_296661.docx`)
@@ -420,12 +420,45 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
   - 12 cụm; sau khi gắn tóm tắt giả thì có 12 node Cluster và 257 cạnh `BELONGS_TO`.
   - **Số cụm và chất lượng cụm phải xem lại khi có đặc trưng thật.**
 
-### 9.3. Sau đó
+### 9.3. Phase 4 — bước 1: baseline không dùng LLM (2026-10-02)
 
-1. **Phase 4: truy vấn + đo Recall@k** trên 40 án test.
-   - Port `search_similar_nodes_top/direct`, `query_similar_laws`.
-   - Các bước rerank, `retrieve_law`, `judge_law` cần LLM. Nên làm trước một baseline **chỉ dùng embedding** (không LLM) để có mốc so sánh.
-2. **Mở rộng:** cào congbobanan cho Chương XVI và các tội ma túy hiếm. Lưu ý lỗi SSL ở mục 3.
+**Lệnh** (không LLM, ~1 phút): `.venv/bin/python scripts/evaluate_retrieval.py` → `outputs/retrieval_eval.json`.
+**Code:** `vn_legal_graph/retrieval/search.py`, `vn_legal_graph/retrieval/metrics.py`.
+
+**Thiết lập:**
+- **Truy vấn:** đặc trưng LLM của án test (không gợi ý tội danh), embed cùng model và cùng định dạng với node Case.
+- **Lấy án:** top-5 án. Điều luật xếp theo thứ tự hạng của án, như bài gốc.
+- **Đi qua cụm:** lấy top-2 cụm theo cosine. Bài gốc dùng LLM để xếp hạng lại cụm.
+- **Dữ liệu test:** 40 án; theo điều: 173: 10, 247: 10, 249: 18, 251: 12. Có 8 án nhiều tội.
+
+| Cách | R@1 | R@2 | R@3 | Hit@1 | R@1: 173 / 247 / 249 / 251 |
+|---|---|---|---|---|---|
+| Tần suất (không nhìn án) | 0,34 | 0,57 | 0,75 | 0,45 | 0 / 0 / 1,00 / 0 |
+| **Tìm án trực tiếp** | **0,79** | **0,96** | 0,97 | **0,90** | 0,70 / 1,00 / 0,56 / 0,75 |
+| Đi qua cụm | 0,72 | 0,96 | 1,00 | 0,82 | 0,70 / 1,00 / 0,61 / 0,42 |
+| So thẳng với điều luật | 0,44 | 0,45 | 0,64 | 0,45 | 0,40 / 1,00 / 0,06 / 0,25 |
+| Tìm án trực tiếp, diễn biến thô (bỏ trích đặc trưng) | 0,69 | 0,96 | 0,99 | 0,80 | 0,70 / 1,00 / 0,56 / 0,42 |
+
+**Đọc kết quả:**
+- **Mọi lỗi top-1 đều là nhầm giữa 249 (tàng trữ) và 251 (mua bán).**
+  - Tìm án trực tiếp: 4 án đúng là 249 bị đoán thành 251.
+  - Đi qua cụm: lỗi theo cả hai chiều (249→251 4 án, 251→249 3 án).
+  - Ở án một tội, tìm án trực tiếp đúng top-1 28/32. Ở án nhiều tội, top-1 luôn thuộc tập điều đúng.
+- **Bước trích đặc trưng có tác dụng:** R@1 tăng từ 0,69 lên 0,79, chủ yếu nhờ Điều 251 (0,42 lên 0,75).
+- **Đi qua cụm kém hơn tìm trực tiếp**, đúng như dự đoán: 8 bản tóm tắt cụm ma túy gần như giống hệt nhau (mục 9.2).
+- **So thẳng với điều luật rất kém ở 249** (0,06). Đó là lý do bài gốc đi qua án tương tự chứ không so trực tiếp với điều luật.
+- **Cảnh báo:**
+  - Tập test nhỏ (40 án); một án đổi kết quả là R@1 của một điều đổi 6–10 điểm.
+  - Nhánh đi qua án chỉ trả về được 4 điều có án trong corpus. R@3 gần 1 phần lớn là do không gian ứng viên hẹp. **R@1 mới là chỉ số có ý nghĩa.**
+
+### 9.4. Việc tiếp theo
+
+1. **Phân biệt 249 và 251, nơi tập trung mọi lỗi:**
+   - Port `judge_law` và `judge_dep` của bài gốc. Câu hỏi kiểu "Có nhằm mục đích mua bán không?" nhắm đúng chỗ này.
+   - Trước đó **người dùng chạy `judge_dep` thật**: `.venv/bin/python scripts/build_law_layer.py --chapters XVI XX`.
+2. Port bước LLM xếp hạng lại án và xếp hạng lại cụm (`RERANK_*`). Người dùng chạy.
+3. Ablation tóm tắt cụm theo kiểu "nêu đặc điểm phân biệt" (mục 9.2).
+4. **Mở rộng:** cào congbobanan cho Chương XVI và các tội ma túy hiếm. Lưu ý lỗi SSL ở mục 3.
 
 ## 10. Tham chiếu
 
