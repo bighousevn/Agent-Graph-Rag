@@ -10,3 +10,6 @@ data/processed/*
 *.pkl
 .venv/
 venv/
+
+# Dataset tải từ Google Drive (lớn, không commit)
+data/raw/dataset_drive/

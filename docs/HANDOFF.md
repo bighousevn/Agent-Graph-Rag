@@ -4,7 +4,7 @@
 > Nó thay cho toàn bộ cuộc trò chuyện trước, diễn ra trong một container cloud và không chuyển sang máy này được.
 > Đừng hỏi lại những gì đã ghi ở mục "Quyết định đã chốt".
 
-Cập nhật lần cuối: 2026-10-01. Nhánh: `claude/legalgraphrag-framework-hv23z3`.
+Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR). Nhánh: `claude/legalgraphrag-framework-hv23z3`.
 
 ---
 
@@ -35,12 +35,18 @@ Cập nhật lần cuối: 2026-10-01. Nhánh: `claude/legalgraphrag-framework-h
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 14 passed
+pytest tests/ -v                                        # kỳ vọng: 35 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
 
-Trước đây phiên cloud bị proxy chặn các trang: `congbobanan.toaan.gov.vn`, `anle.toaan.gov.vn`, `vbpl.vn`, `thuvienphapluat.vn`, `huggingface.co`, `doi.org`, `drive.google.com`. **Trên máy local thì các trang này nên truy cập được.** Đó là lý do chuyển phiên. Khi cào dữ liệu phải giới hạn tốc độ (≥ 1–2 giây mỗi request) để tránh bị chặn IP.
+Phiên cloud trước đây bị proxy chặn nhiều trang. **Trên máy local (đã kiểm tra 2026-10-01):**
+- `huggingface.co`, `drive.google.com`: vào được.
+- `congbobanan.toaan.gov.vn`: HTTP vào được (302), nhưng **HTTPS lỗi chứng chỉ SSL** (chuỗi chứng chỉ không đầy đủ, thường gặp ở các trang `.gov.vn`). Scraper sau này phải xử lý chuyện này.
+
+Khi cào dữ liệu phải giới hạn tốc độ (≥ 1–2 giây mỗi request) để tránh bị chặn IP.
+
+Máy local không có `pip` cho Python hệ thống. Luôn dùng `.venv/bin/python`.
 
 ## 4. Kiến trúc graph của bài gốc (đã đọc trực tiếp từ code)
 
@@ -103,7 +109,7 @@ Embedding **không** phải khâu quyết định cuối cùng. Truy vấn chạ
 |---|---|---|
 | 0 | Nền tảng: `config.py`, `llm.py` (client OpenAI-compatible, cache đĩa theo hash prompt), `embedding.py`, `prompts/vi.py` | ✅ Xong |
 | 1 | Tầng Law + Crime: `law/parse_blhs.py` → `judge_dep.py` → `link_guidance.py` → `build_law_crime.py`, CLI `scripts/build_law_layer.py` | ✅ Code xong và đã kiểm chứng. ⏳ `judge_dep` **chưa chạy thật** (chờ người dùng tự chạy với key) |
-| **2** | **Thu thập và làm sạch bản án** | ⏸️ **Đang ở đây.** Chưa có dữ liệu, chưa có code |
+| **2** | **Thu thập và làm sạch bản án** | 🔄 **Đang ở đây.** Đã có dữ liệu ViCSR (mục 8.1) và loader `vn_legal_graph/cases/vicsr.py` gắn lại nhãn tội danh. **Chờ người dùng quyết định phạm vi** (mục 9), vì ViCSR gần như không có án Chương XVI |
 | 3 | Tầng Case: trích đặc trưng, embedding, kNN, Louvain/Cluster, ráp graph hoàn chỉnh | Chưa làm |
 | 4 | Truy vấn (mục 4.2) và đo Recall@k của Điều luật và tội danh trên tập test | Chưa làm |
 | 5+ | Agent Researcher / Auditor / Adjudicator; mở rộng toàn bộ BLHS | Chưa làm |
@@ -182,38 +188,95 @@ Mỗi bản ghi có dạng:
 
 ## 8. Nguồn dữ liệu bản án — đã tìm hiểu
 
-1. **ViCSR** (SIGIR 2026, DOI 10.1145/3805712.3808526). Tác giả: Minh-Hien Nguyen, Khanh Huyen Nguyen, Tan-Minh Nguyen, Hoang-Quynh Le, Thi-Hai-Yen Vuong (VNU-UET).
-   - Gồm 10.000 bản án hình sự tiếng Việt và 1.122 điều luật. Nhãn lấy từ điều luật mà bản án trích dẫn.
-   - Rất khớp với dự án: nhãn chính là cạnh `RELATES_TO_LAW`, và bài toán của họ chính là phép đo Recall@k ở Phase 4. Họ có fine-tune một bi-encoder tiếng Việt, có thể thay embedding đang dùng.
-   - **Trạng thái:** tác giả nói "sẽ public". Phiên cloud chưa tìm thấy link tải.
-   - Việc cần làm: mở trang paper trên ACM DL tìm link, hoặc email tác giả (TS. Vương Thị Hải Yến, UET).
-   - Khi có dữ liệu, kiểm tra:
-     - Có text phần diễn biến không.
-     - Có ẩn danh chưa.
-     - License.
-     - 1.122 điều gồm những luật nào. Con số này lớn hơn 426 điều của BLHS, có thể gồm BLTTHS hoặc nhãn ở cấp khoản.
-     - Dùng phiên bản BLHS nào.
-2. **`tmquan/anle-toaan-gov-vn`** (HuggingFace, Parquet), cào từ anle.toaan.gov.vn.
-   - Gồm 1.963 văn bản, trong đó 1.155 có `doc_type == "ban_an"`.
-   - Các trường: `case_type` (có `hinh_su`), `pdf_url`, `detail_url`, `doc_code`; nội dung là markdown chia section/paragraph.
-   - Không đủ số lượng cho 26 tội. **Dùng làm mẫu thật** để viết parser và để bổ sung corpus.
-3. **congbobanan.toaan.gov.vn**: nguồn chính nếu phải tự cào. Có bộ lọc loại án / cấp xét xử / tội danh; tải được file PDF.
-4. **Link Google Drive người dùng gửi:** <https://drive.google.com/drive/folders/1heahFSQ2DR5IU6OTuZPsE4z36q7TeICw>. Phiên cloud không mở được nên chưa rõ nội dung. **Việc đầu tiên trên local: mở link này xem có gì.** Có thể là dữ liệu ViCSR hoặc bản án.
+### 8.1. ViCSR — ĐÃ CÓ (thư mục Google Drive người dùng gửi)
+
+- Nguồn: <https://drive.google.com/drive/folders/1heahFSQ2DR5IU6OTuZPsE4z36q7TeICw> (thư mục "Dataset").
+- Đã tải về `data/raw/dataset_drive/`. **Thư mục này nằm trong `.gitignore`, không commit** (150 MB).
+- Paper: ViCSR, SIGIR 2026, DOI 10.1145/3805712.3808526. Tác giả: Minh-Hien Nguyen, Khanh Huyen Nguyen, Tan-Minh Nguyen, Hoang-Quynh Le, Thi-Hai-Yen Vuong (VNU-UET). License chưa rõ.
+
+**Các file:**
+
+| File | Kích thước | Nội dung |
+|---|---|---|
+| `law_shorten.txt` | 143 KB | 1.122 điều: số hiệu + tên điều |
+| `law_detail.txt` | 1,7 MB | 1.122 điều: toàn văn |
+| `case_sumary.txt` | 44 MB | 10.001 án: đoạn tóm tắt, phần lớn là "nội dung vụ án" |
+| `case_detail.txt` | 150 MB | 10.001 án: toàn văn |
+| `ground_truth.json` | 863 KB | `{case_id: [law_id, ...]}`, trung bình 7,1 nhãn mỗi án |
+
+**Định dạng và ID:**
+- Bản ghi có dạng `<id> [---] <text> [-/-]`.
+- Văn bản viết thường. `case_detail` đã bị bỏ dấu câu. Tên người đã được viết tắt một phần (ví dụ "vũ tuấn t").
+- Law ID 1–426 là BLHS (ID trùng số điều). 427–927 là BLTTHS (501 điều). 928–1122 là Luật Thi hành án hình sự.
+- Hơn 90% án xử năm 2017–2019.
+
+**Các vấn đề dữ liệu đã phát hiện (đã đối chiếu trên dữ liệu thật):**
+1. **Lỗi ký tự `ð` thay cho `đ`**, y như file BLHS (2.244 chỗ trong `case_detail`). `normalize_text()` xử lý.
+2. **Nhãn số trộn số điều BLHS 1999 và BLHS 2015.**
+   - 755 án gắn "194", trong đó 750 án là án ma túy. Đây là Điều 194 của BLHS 1999. Ở BLHS 2015, Điều 194 là tội hàng giả là thuốc chữa bệnh.
+   - Tương tự: 138 (trộm cắp, bản 1999), 136, 135, 139, và 46 (giảm nhẹ, bản 1999; 1.074 án).
+3. **Nhãn gốc bị thổi phồng.** Có án gắn cả `[248, 249, 250, 251, 252]`, tức tội ma túy gộp của bản 1999 bị tách ra thành cả 4 điều. Vì vậy nhãn gốc của 248, 250, 252 **không đáng tin**.
+4. **Cách đặt dấu thanh cũ "ma tuý"** (1.634 án) so với "ma túy" trong BLHS.
+5. **Lỗi font cũ TCVN3/ABC** ở khoảng 500 án ("héi ång xđt xö", "ngµy"). Đôi khi chỉ hỏng phần tiêu đề.
+6. **Án trùng:** 135 nhóm văn bản giống hệt nhau, thừa 140 án. 14 nhóm trong đó có nhãn gốc khác nhau. **Phải loại trùng trước khi chia corpus/test.**
+7. Nhãn gốc đôi khi sai hẳn, ví dụ gắn 251 trong khi bản án không nhắc tới "mua bán".
+
+**Loader `vn_legal_graph/cases/vicsr.py` gắn lại nhãn theo BLHS 2015 (`label_case`):**
+- Cắt phần quyết định từ "vì các lẽ trên…". Không dùng chữ "quyết định" đứng một mình, vì nó cũng xuất hiện trong "khi quyết định hình phạt".
+- Đọc câu tuyên án "tuyên bố bị cáo … phạm tội <tên>", kể cả câu có nhiều bị cáo, rồi khớp **tên tội dài nhất** với tên tội của BLHS 2015. Có chuẩn hoá dấu thanh, bảng tên rút gọn (247: "trồng cây thuốc phiện / cần sa"), và khớp gần đúng cho lỗi OCR.
+- Phương án dự phòng: lấy số điều trong phần quyết định, chỉ chấp nhận khi tên tội theo BLHS 2015 của điều đó có xuất hiện trong bản án. Cách này tự loại số điều của bản 1999.
+- Không dùng câu "về tội" (thường là tiền án hoặc tổng hợp hình phạt).
+
+**Kết quả trên 10.001 án** (`.venv/bin/python scripts/vicsr_stats.py`, ghi ra `data/processed/vicsr_stats.json`):
+- Gắn được nhãn 9.499 án: 8.307 qua câu tuyên án, 238 qua khớp gần đúng, 954 qua số điều có xác nhận tên. Không gắn được: 502 án.
+- Khớp nhãn gốc: 8.095 án. Phần lệch chủ yếu đã giải thích được bằng các vấn đề 2, 3, 7 ở trên.
+- Hạn chế đã biết, ngoài phạm vi: tên tội Điều 244 (động vật nguy cấp) bị khớp nhầm thành 410, vì `law_shorten` ghi tên 410 bị cụt ("vi phạm quy định về bảo vệ"), còn tên 244 trong đó là tên sau sửa đổi 2017.
+
+**Số án cho 26 tội mục tiêu (nhãn mới, chưa loại trùng):**
+
+| Chương | Điều | Số án |
+|---|---|---|
+| XX | 249 tàng trữ ma túy | **9.054** |
+| XX | 251 mua bán ma túy | 150 |
+| XX | 247 trồng cây có chất ma túy | 32 |
+| XX | 248 sản xuất ma túy | 9 |
+| XX | 250 vận chuyển ma túy | 5 |
+| XX | 256, 258 | 3, 1 |
+| XX | 252–255, 257, 259 | 0 |
+| XVI | 173 trộm cắp | 51 |
+| XVI | 175 lạm dụng tín nhiệm | 6 |
+| XVI | 168, 174 | 1 mỗi điều |
+| XVI | 169–172, 176–180 | 0 |
+
+**Kết luận:** ViCSR lệch rất mạnh về Điều 249. **Chương XVI gần như không có dữ liệu**, trừ Điều 173. Nếu không cân bằng thì Recall@k vô nghĩa: luôn đoán 249 cũng đúng khoảng 95%. Bài gốc cũng gặp chuyện này và lấy mẫu theo từng tội (corpus tối đa 20 án/tội, test 5–10 án/tội).
+
+### 8.2. `tmquan/anle-toaan-gov-vn` (HuggingFace)
+
+- Cào từ anle.toaan.gov.vn: 1.963 văn bản, trong đó 1.155 là bản án.
+- Có các trường `case_type` (gồm `hinh_su`), `pdf_url`, `detail_url`, `doc_code`. Nội dung là markdown.
+- Chưa tải. Chỉ có ích nếu cần bổ sung án cho Chương XVI.
+
+### 8.3. congbobanan.toaan.gov.vn
+
+- Nguồn để tự cào nếu cần thêm án cho Chương XVI. Có bộ lọc loại án / cấp xét xử / tội danh, tải được PDF.
+- Lưu ý lỗi SSL đã nêu ở mục 3.
 
 ## 9. Việc tiếp theo, theo thứ tự
 
-1. Xem nội dung thư mục Google Drive ở mục 8.4. Nếu là bản án hoặc ViCSR, bỏ qua bước cào.
-2. Kiểm tra ViCSR đã public chưa (mục 8.1).
-3. Tải `tmquan/anle-toaan-gov-vn`, lọc `case_type == "hinh_su"` và `doc_type == "ban_an"`, rồi thống kê số án cho từng tội trong 26 tội.
-4. Dựa trên mẫu thật, viết `vn_legal_graph/cases/`:
-   - `parse_judgment.py`: tách 3 phần, gắn nhãn.
-   - `anonymize.py`.
-   - `leak_filter.py`.
-   - `split.py`.
+1. **Người dùng chọn phạm vi** vì Chương XVI thiếu dữ liệu. Các phương án:
+   - (a) Giữ 2 chương, cào thêm án Chương XVI từ congbobanan.
+   - (b) Thu hẹp về các tội ViCSR có đủ án (249, 251, 247, 173) để chạy hết pipeline ngay, mở rộng sau.
+   - (c) Kết hợp: làm (b) trước, (a) song song.
+2. Viết `vn_legal_graph/cases/build_cases.py`:
+   - loại trùng;
+   - lấy phần diễn biến (`noi_dung` của `case_detail`; dự phòng bằng `case_sumary`);
+   - che đáp án ("phạm tội …", "điều N" trong diễn biến);
+   - lấy mẫu theo tội;
+   - chia corpus/test không trùng nhau;
+   - ghi `cases_vn.json` và `cases_vn_test.json` theo schema ở mục 7.
 
-   Kèm test bằng fixture, theo cùng cách làm với `parse_blhs.py`.
-5. Nếu thiếu dữ liệu, viết scraper cho congbobanan, có giới hạn tốc độ.
-6. Người dùng tự chạy `judge_dep` thật cho 26 điều. Claude rà lại chất lượng các câu hỏi "Có … không?".
+   Kèm test.
+3. Người dùng tự chạy `judge_dep` thật cho 26 điều. Claude rà lại chất lượng các câu hỏi "Có … không?".
 
 ## 10. Tham chiếu
 
