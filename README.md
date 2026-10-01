@@ -2,7 +2,7 @@
 
 Áp dụng phương pháp **LegalGraphRAG** (ACL 2026, [XMUDeepLIT/LegalGraphRAG](https://github.com/XMUDeepLIT/LegalGraphRAG)) cho **Bộ luật Hình sự Việt Nam**.
 
-Giai đoạn hiện tại **chỉ xây dựng HierarGraph (3 tầng: Crime – Law – Case)**, chưa triển khai các agent Researcher/Auditor/Adjudicator của bài báo gốc. Kế hoạch chi tiết và các quyết định thiết kế nằm trong lịch sử làm việc của phiên Claude Code; tóm tắt lại dưới đây.
+Giai đoạn hiện tại **chỉ xây dựng HierarGraph (3 tầng: Crime – Law – Case)**, chưa triển khai các agent Researcher/Auditor/Adjudicator của bài báo gốc. Kế hoạch đầy đủ, các quyết định thiết kế và việc tiếp theo nằm trong [`docs/HANDOFF.md`](docs/HANDOFF.md).
 
 ## HierarGraph là gì
 
