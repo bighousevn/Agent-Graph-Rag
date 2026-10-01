@@ -28,7 +28,7 @@ Yêu cầu:
 
 
 GET_CASE_FEATURES_PROMPT = """
-Bạn là một trợ lý AI pháp lý. Nhiệm vụ của bạn là xử lý phần diễn biến vụ án hình sự đầu vào. Đầu vào gồm mô tả diễn biến vụ án và tên bị cáo. Hãy trích xuất các từ khóa từ mô tả và phân loại vào 4 nhóm sau: Nhân thân bị cáo, Hành vi phạm tội, Đặc điểm đối tượng/tài sản, Lỗi và thái độ. Đầu ra phải là một đối tượng JSON, chỉ chứa JSON, không kèm văn bản giải thích nào khác.
+Bạn là một trợ lý AI pháp lý. Nhiệm vụ của bạn là xử lý phần diễn biến vụ án hình sự đầu vào. Đầu vào gồm mô tả diễn biến vụ án, có thể kèm tội danh của bị cáo. Hãy trích xuất các từ khóa từ mô tả và phân loại vào 4 nhóm sau: Nhân thân bị cáo, Hành vi phạm tội, Đặc điểm đối tượng/tài sản, Lỗi và thái độ. Đầu ra phải là một đối tượng JSON, chỉ chứa JSON, không kèm văn bản giải thích nào khác.
 
 Giải thích các nhóm:
 - Nhân thân bị cáo: trích các đặc điểm pháp lý liên quan đến bị cáo, như độ tuổi, tiền án tiền sự, nghề nghiệp; tránh nêu tuổi cụ thể hoặc tên đơn vị công tác cụ thể. Tên bị cáo không quan trọng.
@@ -51,6 +51,21 @@ Ví dụ đầu ra (chỉ để tham khảo, đầu ra thực tế phải dựa 
 
 Đảm bảo chỉ xuất ra đối tượng JSON.
 Bây giờ hãy xử lý vụ án sau:
+""".strip()
+
+# Query-time input: facts only (the crime is what we are trying to find).
+GET_CASE_FEATURES_INPUT = """
+Diễn biến vụ án: {fact}
+""".strip()
+
+# Corpus-building input. Mirrors the original repo's
+# scripts/prepare_case_features.py, which passes the charge (罪名) and asks
+# for keywords centred on it. Never use this for test/query cases: the
+# crime is the answer.
+GET_CASE_FEATURES_INPUT_WITH_CRIME = """
+Lưu ý: các từ khóa cần xoay quanh tội danh của bị cáo.
+Tội danh: {crime}
+Diễn biến vụ án: {fact}
 """.strip()
 
 

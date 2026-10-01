@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 48 passed
+pytest tests/ -v                                        # kỳ vọng: 56 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -84,10 +84,11 @@ Các file gốc cần tham chiếu:
 
 Embedding **không** phải khâu quyết định cuối cùng. Truy vấn chạy qua 5 bước:
 
-1. **Chuẩn hoá đầu vào giống hệt corpus.**
+1. **Chuẩn hoá đầu vào về cùng khuôn với corpus.**
    - Tách vụ án theo từng bị cáo (`segment_case_text_withname`).
-   - `get_features()` trích 4 nhóm đặc trưng, dùng **cùng prompt** đã dùng khi xây node Case.
+   - `get_features()` trích 4 nhóm đặc trưng.
    - `concat_feature_descriptions()` ghép lại thành text, rồi mới embed. **Không embed câu hỏi thô.**
+   - **Đính chính (đọc lại `scripts/prepare_case_features.py`, 2026-10-01):** prompt khi dựng corpus **có kèm tội danh** ("关键词需要围绕被告罪名展开": từ khoá xoay quanh tội danh), còn prompt lúc truy vấn chỉ có diễn biến. Hai bên cùng khuôn đầu ra, nhưng prompt không giống hệt. Bản Việt làm theo đúng như vậy; án test không bao giờ được gợi ý tội danh.
 2. **Hai nhánh tìm Case.**
    - `top_retrieve`: tìm top-5 Cluster theo cosine → LLM rerank cluster → tìm Case gần nhất trong cluster được chọn.
    - `direct_retrieve`: kNN trên toàn bộ Case.
@@ -309,15 +310,13 @@ Diễn biến dài trung vị ~600 từ, tối đa 4.602 từ. Kiểm tra tự �
 
 ## 9. Việc tiếp theo, theo thứ tự
 
-1. **Phase 3, tầng Case.** Bước trích 4 nhóm đặc trưng cần LLM, nên:
-   - Claude viết `vn_legal_graph/cases/features.py`, dùng `GET_CASE_FEATURES_PROMPT` có sẵn trong `prompts/vi.py`, kèm `--dry-run` và test bằng LLM giả.
-   - **Người dùng tự chạy** với key thật, trên 257 + 40 án.
-   - Lưu ý chi phí: diễn biến trung vị ~600 từ. Nên cắt bớt đầu vào (bài gốc cắt 1.024 ký tự).
-2. Sau khi có đặc trưng: viết `vn_legal_graph/graph/graph_db.py` và `build.py`:
-   - embedding;
-   - cạnh `RELATES_TO_LAW` theo `dieu`, `RELATED_CRIME`;
-   - kNN top-3 → `SIMILAR_TO`;
-   - Louvain + PageRank → `Cluster`. Bước tóm tắt cluster cũng cần LLM, người dùng chạy.
+1. **Phase 3.1, trích đặc trưng: code xong, chờ người dùng chạy.**
+   - Code: `vn_legal_graph/cases/features.py`, CLI `scripts/extract_case_features.py`.
+   - Chạy thử không cần key (Claude được chạy): `--dry-run`. Ước lượng ~400k token đầu vào cho 297 án.
+   - Người dùng tự chạy: trước `--limit 5` để đọc thử kết quả, rồi chạy toàn bộ. Cache ở `.cache/llm` nên chạy lại không tốn phí.
+   - Đầu ra: `data/processed/cases_vn_features.json` và `cases_vn_test_features.json`, có các trường `dac_trung`, `mo_ta_dac_trung`, `dac_trung_loi`.
+   - Đã kiểm tra `llm.py` với `openai` 3.22.1 bằng server giả. Lưu ý: model OpenAI họ o-series/gpt-5 không nhận `max_tokens`/`temperature`.
+2. **Phase 3.2, xây graph** (`vn_legal_graph/graph/`). Code và test dùng embedding giả. Tách bước tóm tắt cluster (cần LLM) thành lệnh riêng để người dùng chạy.
 3. Người dùng tự chạy `judge_dep` thật cho các điều trong phạm vi. Claude rà lại chất lượng.
 4. **Mở rộng sau:** cào congbobanan cho Chương XVI và các tội ma túy hiếm. Lưu ý lỗi SSL ở mục 3.
 
