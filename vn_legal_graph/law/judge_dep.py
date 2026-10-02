@@ -42,9 +42,14 @@ def parse_question_list(raw: str) -> List[str]:
     return result
 
 
+JUDGE_DEP_MAX_TOKENS = 4096
+
+
 def generate_judge_dep_for_article(client: LLMClient, dieu_text: str) -> List[str]:
     prompt = JUDGE_DEP_PROMPT.format(dieu_text=dieu_text)
-    response = client.generate(prompt)
+    # Drug articles yield 30-40+ questions; 1024 tokens cut them off
+    # (Điều 249, 250, 252 on the first real run).
+    response = client.generate(prompt, max_tokens=JUDGE_DEP_MAX_TOKENS)
     questions = parse_question_list(response)
     if not questions:
         print(f"Warning: could not parse judge_dep response: {response[:200]!r}")

@@ -50,13 +50,18 @@ class LLMClient:
             )
         return self._client
 
-    def _cache_path(self, prompt: str) -> str:
+    def _cache_path(self, prompt: str, max_tokens: Optional[int] = None) -> str:
+        fields = {
+            "model": self.llm_config.model,
+            "temperature": self.llm_config.temperature,
+            "prompt": prompt,
+        }
+        # Only an explicit per-call limit is part of the key, so entries
+        # written before this field existed (default limit) stay valid.
+        if max_tokens is not None:
+            fields["max_tokens"] = max_tokens
         key = json.dumps(
-            {
-                "model": self.llm_config.model,
-                "temperature": self.llm_config.temperature,
-                "prompt": prompt,
-            },
+            fields,
             ensure_ascii=False,
             sort_keys=True,
         )
@@ -74,7 +79,7 @@ class LLMClient:
     ) -> str:
         """Send a single-turn prompt to the configured LLM and return the
         text response. Cached on disk when config.cache_llm_calls is True."""
-        cache_path = self._cache_path(prompt) if self.config.cache_llm_calls else None
+        cache_path = self._cache_path(prompt, max_tokens) if self.config.cache_llm_calls else None
         if cache_path and os.path.exists(cache_path):
             with open(cache_path, "r", encoding="utf-8") as f:
                 return json.load(f)["response"]
@@ -90,7 +95,17 @@ class LLMClient:
                     max_tokens=max_tokens or self.llm_config.max_tokens,
                     timeout=self.llm_config.timeout,
                 )
-                text = (resp.choices[0].message.content or "").strip()
+                choice = resp.choices[0]
+                text = (choice.message.content or "").strip()
+                if choice.finish_reason == "length":
+                    # Cut off by the token limit: return it (the caller's
+                    # parser decides), but never cache it, or a re-run with
+                    # a larger limit would get the truncated answer back.
+                    print(
+                        f"Warning: LLM answer truncated at max_tokens="
+                        f"{max_tokens or self.llm_config.max_tokens}; not cached."
+                    )
+                    return text
                 if cache_path:
                     with open(cache_path, "w", encoding="utf-8") as f:
                         json.dump({"prompt": prompt, "response": text}, f, ensure_ascii=False)
