@@ -123,3 +123,75 @@ Nội dung vụ án gốc:
 
 Hãy xuất ra danh sách số thứ tự vụ án đã sắp xếp lại:
 """.strip()
+
+
+# ---- Phase 4: judge_law (port of core/prompt/judge JUDGE_LAW_PROMPT / 0) ----
+
+JUDGE_ELEMENT_PROMPT = """
+Bạn là một trợ lý AI pháp lý chuyên nghiệp, giỏi phân tích khả năng áp dụng của điều luật. Nhiệm vụ của bạn là đánh giá chặt chẽ xem tình tiết vụ án có thỏa mãn yếu tố cấu thành được nêu hay không, dựa trên điều luật, tài liệu bổ trợ, yếu tố cần xét và tình tiết vụ án.
+
+Thông tin đầu vào:
+- Điều luật: nội dung điều luật
+- Tài liệu bổ trợ: điều luật liên quan hoặc văn bản hướng dẫn; nếu trống thì bỏ qua
+- Yếu tố cần xét: yếu tố cụ thể cần kiểm tra; bạn phải tập trung vào yếu tố này
+- Vụ án: tình tiết vụ án
+
+Hướng dẫn phân tích:
+1. Đọc kỹ điều luật, hiểu nội dung và các yếu tố cấu thành.
+2. Nếu tài liệu bổ trợ không trống, dùng nó để giải thích điều luật hoặc yếu tố.
+3. Trích thông tin liên quan từ tình tiết vụ án và đối chiếu với yếu tố cần xét.
+4. Dựa trên tình tiết và lập luận, nếu vụ án thỏa mãn yếu tố thì trả lời true, ngược lại trả lời false.
+
+Định dạng đầu ra: chỉ trả lời "true" hoặc "false", không thêm bất kỳ chữ nào khác.
+
+Điều luật: {law}
+Tài liệu bổ trợ: {related}
+Yếu tố cần xét: {element}
+Vụ án: {case}
+
+Trả lời:
+""".strip()
+
+# Variant (not in the original): all elements of one article in a single
+# call, about 30x fewer calls than one call per element.
+JUDGE_ELEMENTS_BATCH_PROMPT = """
+Bạn là một trợ lý AI pháp lý chuyên nghiệp, giỏi phân tích khả năng áp dụng của điều luật. Nhiệm vụ của bạn là đánh giá chặt chẽ, với từng yếu tố được đánh số dưới đây, xem tình tiết vụ án có thỏa mãn yếu tố đó hay không, dựa trên điều luật, tài liệu bổ trợ và tình tiết vụ án.
+
+Hướng dẫn phân tích:
+1. Đọc kỹ điều luật, hiểu nội dung và các yếu tố cấu thành.
+2. Nếu tài liệu bổ trợ không trống, dùng nó để giải thích điều luật hoặc yếu tố.
+3. Với từng yếu tố, đối chiếu riêng với tình tiết vụ án; vụ án thỏa mãn thì true, ngược lại false.
+
+Định dạng đầu ra: chỉ một mảng JSON gồm đúng {n} giá trị true/false theo thứ tự các yếu tố, ví dụ [true, false, true]. Không thêm chữ nào khác.
+
+Điều luật: {law}
+Tài liệu bổ trợ: {related}
+Các yếu tố cần xét:
+{elements}
+Vụ án: {case}
+
+Trả lời:
+""".strip()
+
+JUDGE_LAW_FINAL_PROMPT = """
+Bạn là một trợ lý phân tích pháp lý chuyên nghiệp. Dựa trên điều luật và kết quả phân tích vụ án được cung cấp, hãy đánh giá điều luật này có áp dụng cho vụ án hay không (tức là vụ án có cấu thành tội phạm theo điều luật này không).
+
+Thông tin đầu vào:
+- Vụ án: mô tả vụ án
+- Điều luật: nội dung điều luật
+- Yếu tố thỏa mãn: các phần của điều luật được xác định là đúng với vụ án
+- Yếu tố không thỏa mãn: các phần của điều luật được xác định là không đúng với vụ án
+
+Hướng dẫn phân tích:
+1. Đọc điều luật và xác định mọi yếu tố cấu thành liên quan.
+2. Lưu ý: hai danh sách trên có thể chưa đầy đủ; bạn cần tự kiểm tra các yếu tố then chốt dựa trên điều luật.
+
+Định dạng đầu ra: chỉ trả lời "true" hoặc "false", không thêm bất kỳ chữ nào khác, thể hiện điều luật có áp dụng cho vụ án hay không.
+
+Vụ án: {case}
+Điều luật: {law}
+Yếu tố thỏa mãn: {true_list}
+Yếu tố không thỏa mãn: {false_list}
+
+Trả lời:
+""".strip()

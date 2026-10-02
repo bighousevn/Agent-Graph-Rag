@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 82 passed
+pytest tests/ -v                                        # kỳ vọng: 93 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -451,14 +451,49 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
   - Tập test nhỏ (40 án); một án đổi kết quả là R@1 của một điều đổi 6–10 điểm.
   - Nhánh đi qua án chỉ trả về được 4 điều có án trong corpus. R@3 gần 1 phần lớn là do không gian ứng viên hẹp. **R@1 mới là chỉ số có ý nghĩa.**
 
-### 9.4. Việc tiếp theo
+### 9.4. Phase 4 — bước 2: judge_law (code xong, chờ người dùng chạy)
 
-1. **Phân biệt 249 và 251, nơi tập trung mọi lỗi:**
-   - Port `judge_law` và `judge_dep` của bài gốc. Câu hỏi kiểu "Có nhằm mục đích mua bán không?" nhắm đúng chỗ này.
-   - Trước đó **người dùng chạy `judge_dep` thật**: `.venv/bin/python scripts/build_law_layer.py --chapters XVI XX`.
-2. Port bước LLM xếp hạng lại án và xếp hạng lại cụm (`RERANK_*`). Người dùng chạy.
-3. Ablation tóm tắt cụm theo kiểu "nêu đặc điểm phân biệt" (mục 9.2).
-4. **Mở rộng:** cào congbobanan cho Chương XVI và các tội ma túy hiếm. Lưu ý lỗi SSL ở mục 3.
+**`judge_dep` thật, lần chạy đầu (người dùng, 2026-10-02):**
+- 23/26 điều có câu hỏi, chất lượng tốt. Ví dụ Điều 173 có đủ các mốc 2 triệu và 50 triệu cùng các trường hợp tái phạm.
+- **Điều 249, 250, 252 bị cắt cụt** ở giới hạn 1.024 token (~3.180 ký tự): điều luật ma túy sinh ra 30–40 câu hỏi.
+- Đã sửa (commit `19aa1e1`):
+  - `judge_dep` được trả lời tới 4.096 token.
+  - **`llm.py` không cache câu trả lời bị cắt** (`finish_reason == "length"`). Trước đó bản bị cắt nằm trong cache và lần chạy lại sẽ nhận lại đúng bản đó.
+  - **→ Người dùng cần chạy lại** `build_law_layer.py --chapters XVI XX`. Cả 26 điều được gọi lại vì khoá cache đã đổi; tốn rất ít.
+
+**Code:**
+- `vn_legal_graph/judge/judge_law.py` và các prompt `JUDGE_*` trong `prompts/vi.py`, port từ `core/judge/judge_law.py` của bài gốc.
+- CLI `scripts/judge_retrieval.py`. Đầu vào là xếp hạng của `outputs/retrieval_eval.json`.
+
+**Cách chạy:**
+- Xét top-3 điều của cách "tìm án trực tiếp".
+- Xếp lại danh sách: điều được chấp nhận lên trước, điều bị bác xuống sau; thứ tự trong mỗi nhóm giữ nguyên.
+- So Recall@k trước và sau. Báo thêm bảng chéo: điều đúng/sai (theo nhãn) × chấp nhận/bác.
+
+**Hai chế độ:**
+- `trung-thanh`: đúng bài gốc, 1 lần gọi cho mỗi yếu tố `judge_dep`, cộng 1 lần quyết định cuối.
+- `gop`: biến thể, hỏi mọi yếu tố của một điều trong 1 lần gọi, trả về mảng JSON.
+
+**Ước lượng chi phí** (40 án, 72 lần xét, khi chưa có `judge_dep` của 249):
+- `trung-thanh`: 1.208 lần gọi, ~2,5 triệu token.
+- `gop`: 116 lần gọi, ~0,26 triệu token.
+
+**Khác bài gốc:**
+- Câu trả lời yếu tố không phải true/false được giữ riêng là "không rõ". Bài gốc coi là "không true".
+- Văn bản vụ án là `dien_bien`, cắt ở 6.000 ký tự.
+
+**Lệnh cho người dùng:**
+```bash
+.venv/bin/python scripts/build_law_layer.py --chapters XVI XX     # sửa judge_dep 249/250/252
+.venv/bin/python scripts/judge_retrieval.py --dry-run             # xem lại chi phí
+.venv/bin/python scripts/judge_retrieval.py --mode gop --per-crime 2
+```
+
+### 9.5. Sau đó
+
+1. Port bước LLM xếp hạng lại án và cụm (`RERANK_*`), cùng nhánh `retrieve_law` (LLM đoán tên tội → Crime node → Law).
+2. Ablation tóm tắt cụm theo kiểu "nêu đặc điểm phân biệt" (mục 9.2).
+3. **Mở rộng:** cào congbobanan cho Chương XVI và các tội ma túy hiếm. Lưu ý lỗi SSL ở mục 3.
 
 ## 10. Tham chiếu
 
