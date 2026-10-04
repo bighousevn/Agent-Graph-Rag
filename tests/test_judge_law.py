@@ -106,3 +106,11 @@ def test_final_prompt_says_aggravating_circumstances_are_optional():
     p = final_prompt(CASE, LAW_251, ["Có mua bán trái phép chất ma túy không?"], ["Có tổ chức không?"])
     assert "yếu tố cấu thành cơ bản" in p
     assert "không bắt buộc" in p
+
+
+def test_final_prompt_states_exclusion_rule():
+    from vn_legal_graph.judge.judge_law import final_prompt
+
+    p = final_prompt(CASE, LAW_251, [], [])
+    assert "điều kiện loại trừ" in p
+    assert "mà không nhằm mục đích mua bán" in p

@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 96 passed
+pytest tests/ -v                                        # kỳ vọng: 97 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -532,9 +532,14 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
   - TTLT 17/2007 (sửa bởi TTLT 08/2015) hướng dẫn BLHS 1999, đã hết hiệu lực nhưng vẫn được tham khảo trong thực tiễn.
   - Nghị quyết HĐTP về tội phạm ma túy vẫn ở dạng dự thảo; có góp ý tới tháng 11/2024.
   - Tạp chí Kiểm sát viết: "chưa có hướng dẫn cụ thể đối với các tội phạm về ma túy của BLHS năm 2015".
-- **Đề xuất (chờ người dùng chốt):**
-  - dùng câu chữ của Điều 249 ("mà không nhằm mục đích mua bán");
-  - cộng với định nghĩa "mua bán" của TTLT 17/2007, gắn nhãn "hướng dẫn BLHS 1999, chỉ tham khảo".
+- **Người dùng đã chốt (2026-10-04):** dùng câu chữ Điều 249 cộng với định nghĩa "mua bán" và "tàng trữ" của TTLT 17/2007, gắn nhãn "hướng dẫn BLHS 1999, chỉ tham khảo".
+  - **Không lấy được toàn văn TTLT bằng công cụ tự động:** vbpl.vn và luatvietnam tải nội dung bằng JavaScript; thuvienphapluat trả lỗi 403; lawnet yêu cầu đăng nhập. **Không tự gõ lại theo trí nhớ.** Người dùng tải file vào `data/raw/guidance/`, rồi Claude trích nguyên văn mục định nghĩa vào `guidance_links.json` (`laws: [249, 251]`).
+  - **Đã làm (từ câu chữ Điều 249):** thêm quy tắc 4 vào `JUDGE_LAW_FINAL_PROMPT`. Nếu điều luật có điều kiện loại trừ và vụ án thoả đúng yếu tố bị loại trừ, thì điều luật không áp dụng.
+- **Sau khi đổi sang nguồn luật mới (Claude đã chạy):**
+  - `judge_dep` mới đủ 26 điều (249: 42 câu hỏi, có XLR-11).
+  - Graph dựng lại; 21 embedding phải tính mới.
+  - Retrieval: các cách đi qua án không đổi (tìm trực tiếp R@1 0,79). "So thẳng với điều luật": R@1 0,44 → 0,45, R@2 0,45 → 0,65.
+- **Ablation đề xuất:** chạy `judge_law --mode gop --per-crime 2` (a) chỉ với quy tắc loại trừ, (b) sau khi thêm TTLT, rồi so sánh.
 
 ### 9.5. Sau đó
 

@@ -2,6 +2,23 @@
   "_note": "Danh sách ĐỀ XUẤT các văn bản hướng dẫn thi hành liên quan tới Chương XVI (Điều 168-180, xâm phạm sở hữu) và Chương XX (Điều 247-259, ma túy) của BLHS. Trạng thái 'can_xac_minh' nghĩa là CHƯA được kiểm tra hiệu lực trên vbpl.vn và CHƯA có nội dung text đính kèm. Cần duyệt và bổ sung file text tương ứng vào thư mục này trước khi vn_legal_graph/law/link_guidance.py có thể sử dụng (qua guidance_links.json).",
   "items": [
     {
+      "so_hieu": "17/2007/TTLT-BCA-VKSNDTC-TANDTC-BTP",
+      "ten": "Thông tư liên tịch hướng dẫn áp dụng một số quy định tại Chương XVIII \"Các tội phạm về ma túy\" của BLHS 1999 (sửa đổi bởi TTLT 08/2015)",
+      "loai": "thong_tu_lien_tich",
+      "ap_dung_cho": "chuong_XX",
+      "dieu_lien_quan": [
+        249,
+        250,
+        251,
+        252
+      ],
+      "hieu_luc_tu": "2008-02-01",
+      "con_hieu_luc": false,
+      "ghi_chu": "Hướng dẫn cho BLHS 1999 (đã hết hiệu lực). Chưa có văn bản hướng dẫn thay thế cho BLHS 2015 (Tạp chí Kiểm sát; dự thảo NQ HĐTP về ma túy chưa ban hành, tra cứu 2026-10-04). Người dùng đồng ý dùng làm tài liệu THAM KHẢO cho định nghĩa tàng trữ / mua bán, gắn nhãn rõ trong related_laws.",
+      "file": null,
+      "trang_thai": "cho_nguoi_dung_tai_file"
+    },
+    {
       "so_hieu": "41/2017/QH14",
       "ten": "Nghị quyết về việc thi hành Bộ luật Hình sự số 100/2015/QH13 đã được sửa đổi, bổ sung một số điều theo Luật số 12/2017/QH14",
       "loai": "nghi_quyet_quoc_hoi",
@@ -36,7 +53,21 @@
       "ten": "Nghị định quy định các danh mục chất ma túy và tiền chất",
       "loai": "nghi_dinh",
       "ap_dung_cho": "chuong_XX",
-      "dieu_lien_quan": [247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259],
+      "dieu_lien_quan": [
+        247,
+        248,
+        249,
+        250,
+        251,
+        252,
+        253,
+        254,
+        255,
+        256,
+        257,
+        258,
+        259
+      ],
       "hieu_luc_tu": null,
       "con_hieu_luc": null,
       "file": null,
@@ -47,7 +78,12 @@
       "ten": "Nghị định quy định về việc giám định tư pháp đối với hàm lượng chất ma túy",
       "loai": "nghi_dinh",
       "ap_dung_cho": "chuong_XX",
-      "dieu_lien_quan": [251, 252, 253, 254],
+      "dieu_lien_quan": [
+        251,
+        252,
+        253,
+        254
+      ],
       "hieu_luc_tu": null,
       "con_hieu_luc": null,
       "file": null,
@@ -58,7 +94,21 @@
       "ten": "Nghị quyết hướng dẫn áp dụng một số quy định của BLHS về các tội xâm phạm sở hữu (nếu còn hiệu lực — cần kiểm tra, có thể đã được thay thế)",
       "loai": "nghi_quyet_hdtp",
       "ap_dung_cho": "chuong_XVI",
-      "dieu_lien_quan": [168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180],
+      "dieu_lien_quan": [
+        168,
+        169,
+        170,
+        171,
+        172,
+        173,
+        174,
+        175,
+        176,
+        177,
+        178,
+        179,
+        180
+      ],
       "hieu_luc_tu": null,
       "con_hieu_luc": null,
       "file": null,

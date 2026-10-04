@@ -17,7 +17,11 @@ its basic elements (usually khoản 1) hold, and unmet aggravating
 circumstances do not count against it. Without it, the trial run rejected
 8 of 23 correct articles: the core element was answered true, but the
 37-39 aggravating-circumstance questions of the drug articles were false
-and the final call read that as "does not apply".
+and the final call read that as "does not apply". A second added rule
+handles exclusions in the article text itself (Điều 249: "mà không nhằm
+mục đích mua bán ..."): if the excluded element holds, the article does not
+apply. The trial accepted 249 for a case where "Có nhằm mục đích mua bán
+... không?" had been answered true.
 
 The original treats a missing or unreadable answer as "not true" ("true"
 not in answer). Here an element answer that is neither true nor false is
