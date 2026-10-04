@@ -12,6 +12,13 @@ all elements as a JSON object keyed by element number
 not in the original; it exists because step 1 costs one call per element
 (30-40 for the drug articles).
 
+The final prompt adds one rule the original lacks: an article applies when
+its basic elements (usually khoản 1) hold, and unmet aggravating
+circumstances do not count against it. Without it, the trial run rejected
+8 of 23 correct articles: the core element was answered true, but the
+37-39 aggravating-circumstance questions of the drug articles were false
+and the final call read that as "does not apply".
+
 The original treats a missing or unreadable answer as "not true" ("true"
 not in answer). Here an element answer that is neither true nor false is
 kept apart as unknown so it can be counted.

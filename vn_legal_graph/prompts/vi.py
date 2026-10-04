@@ -185,6 +185,7 @@ Thông tin đầu vào:
 Hướng dẫn phân tích:
 1. Đọc điều luật và xác định mọi yếu tố cấu thành liên quan.
 2. Lưu ý: hai danh sách trên có thể chưa đầy đủ; bạn cần tự kiểm tra các yếu tố then chốt dựa trên điều luật.
+3. Điều luật áp dụng cho vụ án khi vụ án thỏa mãn các yếu tố cấu thành cơ bản của tội (thường nêu ở khoản 1). Các tình tiết định khung tăng nặng ở các khoản sau (ví dụ có tổ chức, khối lượng hoặc giá trị lớn, tái phạm nguy hiểm) không bắt buộc: việc chúng không thỏa mãn không làm điều luật mất khả năng áp dụng.
 
 Định dạng đầu ra: chỉ trả lời "true" hoặc "false", không thêm bất kỳ chữ nào khác, thể hiện điều luật có áp dụng cho vụ án hay không.
 

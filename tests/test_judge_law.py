@@ -98,3 +98,11 @@ def test_rerank_by_judgment():
     # retrieval said 251 first; judge rejects 251, accepts 249
     assert rerank_by_judgment([251, 249, 173], {251: False, 249: True}) == [249, 251, 173]
     assert rerank_by_judgment([251, 249], {}) == [251, 249]
+
+
+def test_final_prompt_says_aggravating_circumstances_are_optional():
+    from vn_legal_graph.judge.judge_law import final_prompt
+
+    p = final_prompt(CASE, LAW_251, ["Có mua bán trái phép chất ma túy không?"], ["Có tổ chức không?"])
+    assert "yếu tố cấu thành cơ bản" in p
+    assert "không bắt buộc" in p

@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 94 passed
+pytest tests/ -v                                        # kỳ vọng: 95 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -497,6 +497,13 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
 - Ở 9 lần đọc được: 8/9 điều đúng được chấp nhận.
 - → **Sửa:** prompt gộp trả về object có khoá theo số thứ tự (`{"1": true, ...}`); parser `parse_numbered_bools` coi khoá thiếu là "không rõ" thay vì bỏ cả câu trả lời. Cần chạy thử lại.
 - Lưu ý: R@1 trước khi xét của mẫu 16 án này là 0,67, thấp hơn 0,79 của cả 40 án, vì `--per-crime` lấy mẫu theo tổ hợp nhãn nên có nhiều án nhiều tội hơn.
+
+**Lần thử 2 (định dạng có số thứ tự):**
+- 0 lỗi đọc, 0/1.050 yếu tố "không rõ".
+- Nhưng **R@1 giảm từ 0,67 xuống 0,60** (1 án bị hỏng: 2078), và **8/23 điều đúng bị bác**.
+- Ở cả 8 lần bác sai, yếu tố cơ bản ("Có tàng trữ trái phép chất ma túy không?") được trả lời **true**, nhưng 37–39 câu về tình tiết định khung tăng nặng là false, nên bước kết luận cuối ra "không áp dụng".
+- → **Sửa `JUDGE_LAW_FINAL_PROMPT`:** điều luật áp dụng khi thoả yếu tố cấu thành cơ bản (khoản 1); tình tiết định khung không bắt buộc. **Đây là chỗ khác prompt gốc.**
+- Phần trả lời từng yếu tố đã có trong cache, nên chạy lại chỉ tốn 31 lần gọi kết luận.
 
 ### 9.5. Sau đó
 
