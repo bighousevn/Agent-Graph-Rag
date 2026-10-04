@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 97 passed
+pytest tests/ -v                                        # kỳ vọng: 102 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -533,7 +533,19 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
   - Nghị quyết HĐTP về tội phạm ma túy vẫn ở dạng dự thảo; có góp ý tới tháng 11/2024.
   - Tạp chí Kiểm sát viết: "chưa có hướng dẫn cụ thể đối với các tội phạm về ma túy của BLHS năm 2015".
 - **Người dùng đã chốt (2026-10-04):** dùng câu chữ Điều 249 cộng với định nghĩa "mua bán" và "tàng trữ" của TTLT 17/2007, gắn nhãn "hướng dẫn BLHS 1999, chỉ tham khảo".
-  - **Không lấy được toàn văn TTLT bằng công cụ tự động:** vbpl.vn và luatvietnam tải nội dung bằng JavaScript; thuvienphapluat trả lỗi 403; lawnet yêu cầu đăng nhập. **Không tự gõ lại theo trí nhớ.** Người dùng tải file vào `data/raw/guidance/`, rồi Claude trích nguyên văn mục định nghĩa vào `guidance_links.json` (`laws: [249, 251]`).
+  - **Đã có file**, do người dùng tải về: `data/raw/guidance/17_2007_TTLT-BCA-VKSNDTC-TANDTC-BTP_m_61683.docx` và `08_2015_TTLT-BCA-VKSNDTC-TANDTC-BTP_m_295981.docx`.
+    - Lần tải đầu, người dùng lấy nhầm `01_2017_TTLT-VKSNDTC-TANDTC-BCA-BTP` (văn bản về giám định tư pháp vụ án tham nhũng, kinh tế). File này **không dùng**, vẫn nằm untracked trong `data/raw/law/`.
+  - **`vn_legal_graph/law/guidance_ttlt.py`** trích **nguyên văn theo số mục** phần II mục 3 (Điều 194 của BLHS 1999) vào `data/raw/guidance/guidance_links.json`:
+    - 3.1 (tàng trữ, "mà không nhằm mục đích mua bán…") → Điều 249;
+    - 3.2 (vận chuyển; giữ hộ mà biết mục đích mua bán thì là đồng phạm mua bán) → Điều 250, 251;
+    - 3.3 (7 hành vi "mua bán", đều "nhằm bán") → Điều 251, 249;
+    - 3.4 (chiếm đoạt) → Điều 252;
+    - 3.7 điểm c (mua hộ ma túy để sử dụng) → Điều 249, 251; điểm d → Điều 249, 250.
+  - **TTLT 08/2015 không sửa các mục trên.** Nó chỉ sửa mục I.1.1, I.1.4 và bãi bỏ điểm đ mục 3.7; điểm đ không được dùng.
+  - Trường `from` của mỗi bản ghi đều ghi rõ: "hướng dẫn BLHS 1999 Điều 194, nay tương ứng Điều 249–252 BLHS 2015; văn bản đã hết hiệu lực, chỉ dùng tham khảo".
+  - **Đã gắn vào tầng Law** bằng cách chạy `link_guidance` và `build_law_crime` trực tiếp, không gọi LLM.
+  - **Sửa lỗi:** phần tài liệu bổ trợ của Điều 249 mở đầu bằng toàn văn Điều 248 (điều được dẫn chiếu, ~2.000 ký tự), nên khi cắt ở 2.000 ký tự thì mất hết phần TTLT. `render_related` giờ đặt văn bản hướng dẫn lên trước và cắt ở 6.000 ký tự.
+  - Thêm `judge_retrieval.py --no-guidance` (bỏ phần TTLT) để so sánh có và không có hướng dẫn.
   - **Đã làm (từ câu chữ Điều 249):** thêm quy tắc 4 vào `JUDGE_LAW_FINAL_PROMPT`. Nếu điều luật có điều kiện loại trừ và vụ án thoả đúng yếu tố bị loại trừ, thì điều luật không áp dụng.
 - **Sau khi đổi sang nguồn luật mới (Claude đã chạy):**
   - `judge_dep` mới đủ 26 điều (249: 42 câu hỏi, có XLR-11).

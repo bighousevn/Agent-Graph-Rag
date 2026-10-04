@@ -14,9 +14,10 @@
       ],
       "hieu_luc_tu": "2008-02-01",
       "con_hieu_luc": false,
-      "ghi_chu": "Hướng dẫn cho BLHS 1999 (đã hết hiệu lực). Chưa có văn bản hướng dẫn thay thế cho BLHS 2015 (Tạp chí Kiểm sát; dự thảo NQ HĐTP về ma túy chưa ban hành, tra cứu 2026-10-04). Người dùng đồng ý dùng làm tài liệu THAM KHẢO cho định nghĩa tàng trữ / mua bán, gắn nhãn rõ trong related_laws.",
-      "file": null,
-      "trang_thai": "cho_nguoi_dung_tai_file"
+      "ghi_chu": "Hướng dẫn cho BLHS 1999 (đã hết hiệu lực). Chưa có văn bản hướng dẫn thay thế cho BLHS 2015 (Tạp chí Kiểm sát; dự thảo NQ HĐTP về ma túy chưa ban hành, tra cứu 2026-10-04). Người dùng đồng ý dùng làm tài liệu THAM KHẢO cho định nghĩa tàng trữ / mua bán, gắn nhãn rõ trong related_laws. Đã trích nguyên văn phần II mục 3.1, 3.2, 3.3, 3.4, 3.7 điểm c và d vào guidance_links.json (vn_legal_graph/law/guidance_ttlt.py). TTLT 08/2015 không sửa các mục này; nó bãi bỏ điểm đ mục 3.7, điểm này không được dùng.",
+      "file": "data/raw/guidance/17_2007_TTLT-BCA-VKSNDTC-TANDTC-BTP_m_61683.docx",
+      "trang_thai": "da_dung_tham_khao",
+      "file_sua_doi": "data/raw/guidance/08_2015_TTLT-BCA-VKSNDTC-TANDTC-BTP_m_295981.docx"
     },
     {
       "so_hieu": "41/2017/QH14",

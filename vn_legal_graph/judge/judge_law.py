@@ -38,7 +38,7 @@ from ..prompts.vi import JUDGE_ELEMENT_PROMPT, JUDGE_ELEMENTS_BATCH_PROMPT, JUDG
 Generate = Callable[..., str]
 
 MODES = ("trung-thanh", "gop")
-RELATED_MAX_CHARS = 2000
+RELATED_MAX_CHARS = 6000
 CASE_MAX_CHARS = 6000
 
 
@@ -73,8 +73,14 @@ def parse_numbered_bools(text: str, n: int) -> Optional[List[Optional[bool]]]:
 
 
 def render_related(related_laws: Sequence) -> str:
+    """Guidance documents first, then cross-referenced articles, cut at
+    RELATED_MAX_CHARS. Cross-references can be whole articles (Điều 249
+    cites Điều 248, ~2,000 chars) and used to push the guidance past the
+    cut."""
+    items = list(related_laws or [])
+    items.sort(key=lambda x: 0 if isinstance(x, dict) and x.get("loai") == "van_ban_huong_dan" else 1)
     parts = []
-    for item in related_laws or []:
+    for item in items:
         if isinstance(item, dict):
             parts.append(f"{item.get('id', '')}: {item.get('text', '')}")
         else:

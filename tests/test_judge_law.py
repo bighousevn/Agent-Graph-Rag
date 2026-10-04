@@ -114,3 +114,13 @@ def test_final_prompt_states_exclusion_rule():
     p = final_prompt(CASE, LAW_251, [], [])
     assert "điều kiện loại trừ" in p
     assert "mà không nhằm mục đích mua bán" in p
+
+
+def test_render_related_puts_guidance_first():
+    related = [
+        {"loai": "dan_chieu_dieu_luat", "id": "Điều 248", "text": "x" * 7000},
+        {"loai": "van_ban_huong_dan", "id": "TTLT 17/2007 mục 3.1", "text": "Tàng trữ là ..."},
+    ]
+    out = render_related(related)
+    assert out.startswith("TTLT 17/2007 mục 3.1: Tàng trữ là ...")
+    assert len(out) <= 6000

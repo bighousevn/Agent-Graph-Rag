@@ -51,6 +51,10 @@ def main() -> None:
     parser.add_argument("--laws", default="data/processed/law_to_crime_vn.json")
     parser.add_argument("--test", default="data/processed/cases_vn_test_features.json")
     parser.add_argument("--per-crime", type=int, default=None)
+    parser.add_argument(
+        "--no-guidance", action="store_true",
+        help="Drop guidance documents (TTLT 17/2007) from related_laws, for the with/without comparison.",
+    )
     parser.add_argument("--dotenv-path", default=".env")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -60,7 +64,10 @@ def main() -> None:
             "entry": l["id"],
             "description": l["items"][0]["text"],
             "judge_dep": l["items"][0].get("judge_dep", []),
-            "related_laws": l["items"][0].get("related_laws", []),
+            "related_laws": [
+                r for r in l["items"][0].get("related_laws", [])
+                if not (args.no_guidance and isinstance(r, dict) and r.get("loai") == "van_ban_huong_dan")
+            ],
         }
         for l in load(args.laws)
     }
@@ -135,10 +142,11 @@ def main() -> None:
     unknown = sum(len(d["khong_ro"]) for ds in decisions.values() for d in ds.values())
     print(f"Không đọc được danh sách: {unreadable} | yếu tố không rõ: {unknown}")
 
-    out = f"outputs/judge_law_{args.mode}.json"
+    out = f"outputs/judge_law_{args.mode}{'_khong_huong_dan' if args.no_guidance else ''}.json"
     with open(out, "w", encoding="utf-8") as f:
         json.dump(
             {"mode": args.mode, "method": args.method, "candidates": args.candidates,
+             "huong_dan": not args.no_guidance,
              "metrics": {"truoc": res_before, "sau": res_after},
              "decisions": decisions, "predictions_sau": after},
             f, ensure_ascii=False, indent=2,
