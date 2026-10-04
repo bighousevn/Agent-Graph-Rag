@@ -505,6 +505,15 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
 - → **Sửa `JUDGE_LAW_FINAL_PROMPT`:** điều luật áp dụng khi thoả yếu tố cấu thành cơ bản (khoản 1); tình tiết định khung không bắt buộc. **Đây là chỗ khác prompt gốc.**
 - Phần trả lời từng yếu tố đã có trong cache, nên chạy lại chỉ tốn 31 lần gọi kết luận.
 
+**Lần thử 3 (sau khi sửa prompt kết luận):**
+- R@1 0,67 → 0,67 (không đổi).
+- Điều đúng: chấp nhận 18 / bác 5. **Điều sai: chấp nhận 6 / bác 2**, tức là judge_law gần như chấp nhận mọi thứ.
+- **Không phân biệt được 249 và 251**, nơi tập trung mọi lỗi của retrieval. Hai nguyên nhân thấy được trong các câu trả lời:
+  1. Án mua ma túy về để tự dùng (1385, 1463; nhãn 249) vẫn được trả lời true cho "Có mua bán trái phép chất ma túy không?". LLM coi "mua để dùng" là "mua bán".
+  2. Án 783 (nhãn 251): yếu tố "Có nhằm mục đích mua bán … không?" của Điều 249 được trả lời **true**, nhưng bước kết luận vẫn chấp nhận 249. Câu hỏi đã mất đi ý phủ định của điều luật ("**mà không** nhằm mục đích mua bán …").
+- Điều này gợi ý rằng thứ thiếu là **kiến thức hướng dẫn áp dụng** (phân biệt tàng trữ và mua bán theo mục đích). Ở bài gốc, phần này đến từ `related_laws` (giải thích tư pháp). Ở đây `guidance_links.json` vẫn còn trống.
+- **Cần người dùng quyết định hướng đi tiếp** (xem các phương án trong cuộc trò chuyện).
+
 ### 9.5. Sau đó
 
 1. Port bước LLM xếp hạng lại án và cụm (`RERANK_*`), cùng nhánh `retrieve_law` (LLM đoán tên tội → Crime node → Law).
