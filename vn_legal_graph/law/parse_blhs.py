@@ -9,7 +9,7 @@ hierarchy instead of flattening straight to "entry" numbers.
 
 Usage:
     python -m vn_legal_graph.law.parse_blhs \
-        --docx data/raw/law/100_2015_QH13_296661.docx \
+        --docx data/raw/law/11_VBHN-VPQH_650257.docx \
         --output data/processed/criminal_law_vn.json
 
 Known data quirk handled here: some legacy .docx exports of Vietnamese
@@ -120,6 +120,10 @@ PHAN_RE = re.compile(r"^Phần\s+thứ\s+\S+$", re.IGNORECASE)
 CHUONG_RE = re.compile(r"^Chương\s+[IVXLCDM]+$")
 MUC_RE = re.compile(r"^Mục\s+(\d+)\.\s*(.+)$")
 DIEU_RE = re.compile(r"^Điều\s+(\d+)([a-zđ]?)\.\s*(.+)$", re.IGNORECASE)
+# Footnote reference inside the text ("d)[3] Nghiêm trị", "Điều 51.[7]") and
+# footnote body at the end of a consolidated text ("[3] Điểm này được ...").
+FOOTNOTE_REF_RE = re.compile(r"\[\d+\]")
+FOOTNOTE_BODY_RE = re.compile(r"^\[\d+\]\s")
 KHOAN_RE = re.compile(r"^(\d+)\.\s*(.*)$")
 DIEM_RE = re.compile(r"^([a-zđ])\)\s*(.*)$", re.IGNORECASE)
 
@@ -159,6 +163,15 @@ def parse_paragraphs(paragraphs: List[str]) -> List[Dieu]:
 
     for raw_line in paragraphs:
         line = raw_line.strip()
+        if not line:
+            continue
+        # Consolidated texts (Văn bản hợp nhất) end with the footnotes that
+        # explain each amendment: "[1] Khoản này được sửa đổi ...". Once
+        # articles have started, the first such paragraph ends the law text;
+        # without this they would all be appended to the last Điều.
+        if articles and FOOTNOTE_BODY_RE.match(line):
+            break
+        line = FOOTNOTE_REF_RE.sub("", line).strip()
         if not line:
             continue
 

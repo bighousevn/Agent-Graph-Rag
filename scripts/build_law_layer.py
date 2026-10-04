@@ -34,7 +34,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--docx",
-        default="data/raw/law/100_2015_QH13_296661.docx",
+        default="data/raw/law/11_VBHN-VPQH_650257.docx",
         help="Path to the BLHS .docx source.",
     )
     parser.add_argument(

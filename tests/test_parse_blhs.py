@@ -113,3 +113,31 @@ def test_entry_label_and_full_text(articles):
 
 def test_normalize_fixes_oi_glyph():
     assert normalize_text("đƣợc Ƣu tiên") == "được Ưu tiên"
+
+
+def test_consolidated_text_footnotes():
+    # Văn bản hợp nhất: inline "[n]" markers and footnote bodies at the end.
+    paragraphs = [normalize_text(p) for p in [
+        "Bộ luật Hình sự số 100/2015/QH13 ..., được sửa đổi, bổ sung bởi:",
+        "Quốc hội ban hành Bộ luật Hình sự[2].",
+        "Phần thứ hai",
+        "CÁC TỘI PHẠM",
+        "Chương XVI",
+        "CÁC TỘI XÂM PHẠM SỞ HỮU",
+        "Điều 173.[5] Tội trộm cắp tài sản",
+        "1.[6] Người nào trộm cắp tài sản của người khác trị giá từ 2.000.000 đồng[7] đến dưới 50.000.000 đồng:",
+        "a)[8] Đã bị xử phạt vi phạm hành chính về hành vi chiếm đoạt tài sản mà còn vi phạm;",
+        "Điều 217a.[9] Tội vi phạm quy định về kinh doanh theo phương thức đa cấp",
+        "1. Người nào tổ chức hoạt động kinh doanh theo phương thức đa cấp ...",
+        "[5] Điều này được sửa đổi, bổ sung theo quy định tại khoản 37 Điều 1 của Luật số 12/2017/QH14",
+        "[6] Khoản này được sửa đổi",
+    ]]
+    arts = parse_paragraphs(paragraphs)
+    assert [a.entry_label for a in arts] == ["173", "217a"]
+    d173 = arts[0]
+    assert d173.title == "Tội trộm cắp tài sản"
+    assert d173.khoan[0].text.startswith("Người nào trộm cắp")
+    assert "[" not in d173.full_text()
+    assert d173.khoan[0].diem[0].ky_hieu == "a"
+    # footnote bodies are not appended to the last article
+    assert "Luật số 12/2017" not in arts[1].full_text()

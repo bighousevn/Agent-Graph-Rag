@@ -60,7 +60,7 @@ class EmbeddingConfig:
 
 @dataclass
 class PathsConfig:
-    raw_law_docx: str = "data/raw/law/100_2015_QH13_296661.docx"
+    raw_law_docx: str = "data/raw/law/11_VBHN-VPQH_650257.docx"
     raw_guidance_dir: str = "data/raw/guidance"
     raw_cases_dir: str = "data/raw/cases"
     processed_dir: str = "data/processed"

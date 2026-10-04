@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 95 passed
+pytest tests/ -v                                        # kỳ vọng: 96 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -130,7 +130,8 @@ Embedding **không** phải khâu quyết định cuối cùng. Truy vấn chạ
 - **Dẫn chiếu chéo tìm được:**
   - Điều 172, 173, 174, 175 → Điều 168.
   - Điều 256 → Điều 255.
-- **Lưu ý về nguồn luật:** file này là **Luật 100/2015/QH13 bản gốc**, chưa hợp nhất các lần sửa đổi:
+- **Cập nhật 2026-10-04: nguồn luật đã chuyển sang Văn bản hợp nhất** `data/raw/law/11_VBHN-VPQH_650257.docx` (người dùng cung cấp). Chi tiết ở mục 6. Các ghi chú bên dưới là về file bản gốc 2015.
+- **Lưu ý về nguồn luật (cũ):** file `100_2015_QH13_296661.docx` là **Luật 100/2015/QH13 bản gốc**, chưa hợp nhất các lần sửa đổi:
   - Luật 12/2017/QH14.
   - Luật 86/2025/QH15, hiệu lực từ 01/7/2025.
   Dùng tạm được để thử cấu trúc, nhưng phải thay bằng bản hợp nhất trước khi dùng nghiêm túc.
@@ -150,6 +151,13 @@ Embedding **không** phải khâu quyết định cuối cùng. Truy vấn chạ
 - **Luôn viết test trước khi tin số liệu.** Lỗi Ð/đ được phát hiện nhờ đối chiếu số lượng điều.
 - **Văn bản hướng dẫn giữ nhãn "cần xác minh"** cho tới khi kiểm tra hiệu lực thật trên vbpl.vn.
 - Người dùng trả lời **"không có ưu tiên"** cho cách lấy bản án. Claude tự chọn hướng hợp lý, có giải thích.
+- **Nguồn luật = Văn bản hợp nhất số 11/VBHN-VPQH** (`data/raw/law/11_VBHN-VPQH_650257.docx`, chọn ngày 2026-10-04).
+  - Gộp Luật 12/2017/QH14 và Luật 59/2024/QH15; **chưa gồm Luật 86/2025/QH15**. Khớp với luật mà các án ViCSR (2017–2022) áp dụng.
+  - **20/26 điều trong phạm vi khác bản gốc 2015.** Ví dụ: 173, 174, 176 chỉ còn giống khoảng 40–50%; 249 có tiêu chí tái phạm mới và thêm XLR-11, lá khát vào danh mục.
+  - Chỉ đổi tên 1 tội trong phạm vi: Điều 259.
+  - Parser đọc ra 407 điều. Các điều 33, 69, 90–107 đã bị bãi bỏ; có thêm Điều 217a.
+  - File có 403 chú thích sửa đổi `[n]`. Parser bỏ ký hiệu `[n]` trong câu và dừng đọc ở phần thân chú thích cuối file; trước đó cả 403 chú thích bị dán vào Điều 426.
+  - `judge_dep` sinh từ bản 2015 **phải chạy lại**.
 - **Dữ liệu bản án = ViCSR. Phạm vi thu hẹp còn 4 tội: 249, 251, 173, 247** (người dùng chọn ngày 2026-10-01: thu hẹp trước, mở rộng sau). Nhãn tội danh lấy lại từ câu tuyên án theo BLHS 2015, không dùng nhãn số gốc của ViCSR.
 
 ## 7. Phase 2 — đặc tả
@@ -513,6 +521,20 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
   2. Án 783 (nhãn 251): yếu tố "Có nhằm mục đích mua bán … không?" của Điều 249 được trả lời **true**, nhưng bước kết luận vẫn chấp nhận 249. Câu hỏi đã mất đi ý phủ định của điều luật ("**mà không** nhằm mục đích mua bán …").
 - Điều này gợi ý rằng thứ thiếu là **kiến thức hướng dẫn áp dụng** (phân biệt tàng trữ và mua bán theo mục đích). Ở bài gốc, phần này đến từ `related_laws` (giải thích tư pháp). Ở đây `guidance_links.json` vẫn còn trống.
 - **Cần người dùng quyết định hướng đi tiếp** (xem các phương án trong cuộc trò chuyện).
+
+**Nguồn luật mới (2026-10-04), xem mục 6:**
+- Phải chạy lại `build_law_layer.py --chapters XVI XX` (LLM, người dùng chạy), vì nội dung điều luật đã đổi.
+- Sau đó Claude chạy lại `build_graph.py` (embedding của node Law đổi; node Case dùng lại cache) và `evaluate_retrieval.py`.
+- Cách "so thẳng với điều luật" sẽ đổi kết quả; cách "tìm án trực tiếp" thì không.
+
+**Câu hỏi còn mở về phân biệt 249 và 251** (tra cứu ngày 2026-10-04):
+- **Không có văn bản hướng dẫn nào đang có hiệu lực** cho BLHS 2015 về định nghĩa "mua bán" và "tàng trữ" chất ma túy.
+  - TTLT 17/2007 (sửa bởi TTLT 08/2015) hướng dẫn BLHS 1999, đã hết hiệu lực nhưng vẫn được tham khảo trong thực tiễn.
+  - Nghị quyết HĐTP về tội phạm ma túy vẫn ở dạng dự thảo; có góp ý tới tháng 11/2024.
+  - Tạp chí Kiểm sát viết: "chưa có hướng dẫn cụ thể đối với các tội phạm về ma túy của BLHS năm 2015".
+- **Đề xuất (chờ người dùng chốt):**
+  - dùng câu chữ của Điều 249 ("mà không nhằm mục đích mua bán");
+  - cộng với định nghĩa "mua bán" của TTLT 17/2007, gắn nhãn "hướng dẫn BLHS 1999, chỉ tham khảo".
 
 ### 9.5. Sau đó
 

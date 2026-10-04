@@ -28,7 +28,7 @@ Hai chương thử nghiệm: **Chương XVI** (Điều 168–180, xâm phạm s�
 
 **Chưa làm:** thu thập bản án (Phase 2), tầng Case và lắp ráp graph hoàn chỉnh (Phase 3), kiểm định truy xuất (Phase 4), các agent (Phase 5+).
 
-**Lưu ý về nguồn luật:** file `data/raw/law/100_2015_QH13_296661.docx` là **văn bản Luật 100/2015/QH13 gốc**, chưa hợp nhất các sửa đổi 2017 (Luật 12/2017/QH14) và 2025 (Luật 86/2025/QH15). Cần thay bằng bản hợp nhất mới nhất trước khi dùng cho mục đích ngoài thử nghiệm cấu trúc.
+**Nguồn luật:** `data/raw/law/11_VBHN-VPQH_650257.docx` là **Văn bản hợp nhất số 11/VBHN-VPQH** của BLHS 2015, đã gộp các sửa đổi của Luật 12/2017/QH14 và Luật 59/2024/QH15, **chưa gồm Luật 86/2025/QH15**. Bản này khớp với luật mà các bản án trong ViCSR (2017–2022) áp dụng. File `100_2015_QH13_296661.docx` (bản gốc 2015) chỉ giữ để đối chiếu.
 
 ## Cài đặt
 
