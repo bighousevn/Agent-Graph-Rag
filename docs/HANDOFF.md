@@ -553,6 +553,14 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
   - Retrieval: các cách đi qua án không đổi (tìm trực tiếp R@1 0,79). "So thẳng với điều luật": R@1 0,44 → 0,45, R@2 0,45 → 0,65.
 - **Ablation đề xuất:** chạy `judge_law --mode gop --per-crime 2` (a) chỉ với quy tắc loại trừ, (b) sau khi thêm TTLT, rồi so sánh.
 
+**Lần thử 4 (có quy tắc loại trừ; có và không có TTLT, `--per-crime 2`, 16 án):**
+- Cả hai cấu hình đều cho R@1 0,67 → 0,67. Các thay đổi ở top-1 chỉ xảy ra trong án nhiều tội và vẫn nằm trong tập điều đúng.
+- Quy tắc loại trừ làm judge chặt hơn: điều sai được chấp nhận giảm từ 6 xuống 1, nhưng điều đúng bị bác tăng từ 5 lên 10–11.
+- **TTLT không tạo khác biệt đo được** (13 so với 12 điều đúng được chấp nhận).
+- **9/11 điều đúng bị bác thuộc án nhiều tội**, chủ yếu là 249 trong án có cả 249 và 251. Nguyên nhân là **không tách theo bị cáo**: bài gốc chạy `segment_case_text_withname` (mỗi bị cáo một mô tả) trước khi judge, còn ở đây judge xét cả bản án. Bị cáo A tàng trữ, bị cáo B mua bán, nên quy tắc loại trừ bác nhầm 249.
+- **Mẫu `--per-crime 2` không phù hợp để đo sửa lỗi 249/251:** trong 4 án sai top-1 trên cả 40 án (1463, 2119, 2196, 8265; đều là 249 bị đoán thành 251), mẫu chỉ có 1463.
+- → Bước tiếp theo: chạy judge trên đủ 40 án, và/hoặc port bước tách theo bị cáo.
+
 ### 9.5. Sau đó
 
 1. Port bước LLM xếp hạng lại án và cụm (`RERANK_*`), cùng nhánh `retrieve_law` (LLM đoán tên tội → Crime node → Law).
