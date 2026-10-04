@@ -5,7 +5,7 @@ from vn_legal_graph.judge.judge_law import (
     batch_prompt,
     judge_law,
     parse_bool,
-    parse_bool_list,
+    parse_numbered_bools,
     render_related,
     rerank_by_judgment,
 )
@@ -26,12 +26,14 @@ def test_parse_bool():
     assert parse_bool("không chắc") is None
 
 
-def test_parse_bool_list():
-    assert parse_bool_list("[true, False]", 2) == [True, False]
-    assert parse_bool_list("```json\n[true,false]\n```", 2) == [True, False]
-    assert parse_bool_list("[true]", 2) is None
-    assert parse_bool_list("[1, 0]", 2) is None
-    assert parse_bool_list("không", 2) is None
+def test_parse_numbered_bools():
+    assert parse_numbered_bools('{"1": true, "2": False}', 2) == [True, False]
+    assert parse_numbered_bools('```json\n{"2": false, "1": true}\n```', 2) == [True, False]
+    # missing, extra and non-boolean entries do not throw the answer away
+    assert parse_numbered_bools('{"1": true, "3": false, "9": true}', 3) == [True, None, False]
+    assert parse_numbered_bools('{"1": 1}', 1) == [None]
+    assert parse_numbered_bools("[true, false]", 2) is None
+    assert parse_numbered_bools("không", 2) is None
 
 
 def test_render_related():
@@ -63,13 +65,22 @@ def test_batch_mode_one_call_for_all_elements():
 
     def fake(prompt, max_tokens=None):
         calls.append(prompt)
-        return "[true, false]" if "Các yếu tố cần xét" in prompt else "true"
+        return '{"1": true, "2": false}' if "Các yếu tố cần xét" in prompt else "true"
 
     out = judge_law(fake, CASE, LAW_251, mode="gop")
     assert len(calls) == 2
     assert out["ap_dung"] is True
     assert out["dung"] == ["Có mua bán trái phép chất ma túy không?"]
     assert "1. Có mua bán" in batch_prompt(CASE, LAW_251)
+
+
+def test_batch_mode_partial_answer_counts_missing_as_unknown():
+    out = judge_law(
+        lambda p, max_tokens=None: '{"1": true}' if "Các yếu tố" in p else "true", CASE, LAW_251, mode="gop"
+    )
+    assert out["dung"] == ["Có mua bán trái phép chất ma túy không?"]
+    assert out["khong_ro"] == ["Có phạm tội 02 lần trở lên không?"]
+    assert out["loi_doc_danh_sach"] is False
 
 
 def test_batch_mode_unreadable_list():

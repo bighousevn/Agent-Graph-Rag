@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 93 passed
+pytest tests/ -v                                        # kỳ vọng: 94 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -488,6 +488,15 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
 .venv/bin/python scripts/judge_retrieval.py --dry-run             # xem lại chi phí
 .venv/bin/python scripts/judge_retrieval.py --mode gop --per-crime 2
 ```
+
+**Lần chạy lại `judge_dep` (2026-10-04):** đủ 26 điều; 249: 41, 250: 45, 252: 43 câu hỏi.
+
+**Lần thử `judge_law --mode gop --per-crime 2` (16 án, 31 lần xét) — lỗi định dạng:**
+- R@1 không đổi (0,67 → 0,67), vì **22/31 câu trả lời gộp không đọc được**. `gpt-4o-mini` trả đúng dạng JSON nhưng **đếm sai số phần tử** (43/41, 35/36, 34/36), mà code đòi đúng số lượng nên bỏ cả câu trả lời.
+- Hậu quả: LLM ra kết luận cuối gần như mù, và 8 điều đúng bị bác.
+- Ở 9 lần đọc được: 8/9 điều đúng được chấp nhận.
+- → **Sửa:** prompt gộp trả về object có khoá theo số thứ tự (`{"1": true, ...}`); parser `parse_numbered_bools` coi khoá thiếu là "không rõ" thay vì bỏ cả câu trả lời. Cần chạy thử lại.
+- Lưu ý: R@1 trước khi xét của mẫu 16 án này là 0,67, thấp hơn 0,79 của cả 40 án, vì `--per-crime` lấy mẫu theo tổ hợp nhãn nên có nhiều án nhiều tội hơn.
 
 ### 9.5. Sau đó
 

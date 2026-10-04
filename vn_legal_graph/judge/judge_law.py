@@ -7,7 +7,8 @@ Port of the original repo's core/judge/judge_law.py:
    true and false (JUDGE_LAW_FINAL_PROMPT).
 
 ``mode="gop"`` replaces step 1 by a single call per article that answers
-all elements as a JSON list (JUDGE_ELEMENTS_BATCH_PROMPT). That variant is
+all elements as a JSON object keyed by element number
+(JUDGE_ELEMENTS_BATCH_PROMPT). That variant is
 not in the original; it exists because step 1 costs one call per element
 (30-40 for the drug articles).
 
@@ -36,18 +37,28 @@ def parse_bool(text: str) -> Optional[bool]:
     return None if m is None else m.group(1) == "true"
 
 
-def parse_bool_list(text: str, n: int) -> Optional[List[bool]]:
-    """A JSON list of exactly n booleans, or None."""
-    first, last = text.find("["), text.rfind("]")
+def parse_numbered_bools(text: str, n: int) -> Optional[List[Optional[bool]]]:
+    """A JSON object {"1": true, "2": false, ...} -> list of n answers, None
+    where an element is missing or not a boolean. Returns None only if no
+    JSON object can be read.
+
+    Keyed by element number because gpt-4o-mini, asked for a plain list of
+    36-45 booleans, returned 1-2 items too many or too few in 22 of 31
+    trial calls, which made the whole answer unusable."""
+    first, last = text.find("{"), text.rfind("}")
     if first == -1 or last < first:
         return None
     try:
         data = json.loads(text[first : last + 1].lower())
     except json.JSONDecodeError:
         return None
-    if not isinstance(data, list) or len(data) != n or not all(isinstance(x, bool) for x in data):
+    if not isinstance(data, dict):
         return None
-    return data
+    out: List[Optional[bool]] = []
+    for i in range(1, n + 1):
+        value = data.get(str(i))
+        out.append(value if isinstance(value, bool) else None)
+    return out
 
 
 def render_related(related_laws: Sequence) -> str:
@@ -108,13 +119,15 @@ def judge_law(generate: Generate, case_text: str, law: Dict, mode: str = "trung-
             verdict = parse_bool(generate(prompt, max_tokens=16))
             (true_list if verdict else false_list if verdict is False else unknown).append(element)
     elif elements:
-        verdicts = parse_bool_list(generate(batch_prompt(case_text, law), max_tokens=512), len(elements))
+        verdicts = parse_numbered_bools(
+            generate(batch_prompt(case_text, law), max_tokens=1024), len(elements)
+        )
         if verdicts is None:
             batch_failed = True
             unknown = elements
         else:
             for element, verdict in zip(elements, verdicts):
-                (true_list if verdict else false_list).append(element)
+                (true_list if verdict else false_list if verdict is False else unknown).append(element)
 
     answer = generate(final_prompt(case_text, law, true_list, false_list), max_tokens=16)
     return {

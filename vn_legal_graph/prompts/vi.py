@@ -162,7 +162,7 @@ Hướng dẫn phân tích:
 2. Nếu tài liệu bổ trợ không trống, dùng nó để giải thích điều luật hoặc yếu tố.
 3. Với từng yếu tố, đối chiếu riêng với tình tiết vụ án; vụ án thỏa mãn thì true, ngược lại false.
 
-Định dạng đầu ra: chỉ một mảng JSON gồm đúng {n} giá trị true/false theo thứ tự các yếu tố, ví dụ [true, false, true]. Không thêm chữ nào khác.
+Định dạng đầu ra: chỉ một đối tượng JSON, khóa là số thứ tự của yếu tố (từ "1" đến "{n}"), giá trị là true hoặc false, ví dụ {{"1": true, "2": false, "3": true}}. Không thêm chữ nào khác.
 
 Điều luật: {law}
 Tài liệu bổ trợ: {related}
