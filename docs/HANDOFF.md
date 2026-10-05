@@ -561,6 +561,29 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
 - **Mẫu `--per-crime 2` không phù hợp để đo sửa lỗi 249/251:** trong 4 án sai top-1 trên cả 40 án (1463, 2119, 2196, 8265; đều là 249 bị đoán thành 251), mẫu chỉ có 1463.
 - → Bước tiếp theo: chạy judge trên đủ 40 án, và/hoặc port bước tách theo bị cáo.
 
+**Chạy đủ 40 án (`judge_law --mode gop`, có TTLT, `gpt-4o-mini`, 2026-10-05):**
+
+| | trước khi xét | sau khi xét |
+|---|---|---|
+| R@1 | 0,792 | **0,767** |
+| R@2 | 0,963 | 0,963 |
+| Hit@1 | 0,900 | 0,875 |
+| R@1 theo điều 173 / 247 / 249 / 251 | 0,70 / 1,00 / 0,56 / 0,75 | 0,80 / 1,00 / **0,39** / 0,83 |
+
+- **Không sửa được án nào trong 4 án sai top-1** (1463, 2119, 2196, 8265). **Làm hỏng thêm 1 án** (3110: 249 đang đúng, sau khi xét thì 251 lên đầu).
+- **Chẩn đoán: bước trả lời từng yếu tố làm đúng, bước kết luận cuối làm sai.**
+  - Ở cả 4 án sai và án 3110, các yếu tố của 249 đều đúng như văn bản: "Có tàng trữ…" là true; "Heroine/Methamphetamine… từ 0,1 gam đến dưới 05 gam" là true; "Có nhằm mục đích mua bán…" là false; các tình tiết tăng nặng là false.
+  - Dù vậy `JUDGE_LAW_FINAL_PROMPT` vẫn trả "false": 2 yếu tố đúng giữa 40 yếu tố sai bị đọc thành "không áp dụng", kể cả khi prompt đã dặn tình tiết định khung không bắt buộc.
+  - Lỗi ở mức yếu tố còn lại: án 1463 và 2196 vẫn chấp nhận 251. LLM coi "mua về để sử dụng" là "mua bán", dù có TTLT mục 3.3.
+- Tổng hợp quyết định, chia theo án một tội / án nhiều tội:
+  - án một tội: điều đúng nhận 24 / bác 8, điều sai nhận 5 / bác 18;
+  - án nhiều tội: điều đúng nhận 6 / bác 9, điều sai bác 2.
+- **Kết luận tạm:** với `gpt-4o-mini`, bước judge_law như đã port không cải thiện truy xuất. Điểm yếu chính là lời gọi tổng hợp cuối.
+- **Các hướng có thể làm** (chờ người dùng chọn):
+  - (a) Thay lời gọi tổng hợp bằng luật trong code, dựa trên nhãn của từng câu hỏi `judge_dep` (cơ bản / định khung / loại trừ). Khác bài gốc.
+  - (b) Dùng model mạnh hơn cho judge (đổi `LLM_MODEL`), như một ablation.
+  - (c) Ghi nhận kết quả và chuyển sang các bước khác (rerank, `retrieve_law`, tách theo bị cáo).
+
 ### 9.5. Sau đó
 
 1. Port bước LLM xếp hạng lại án và cụm (`RERANK_*`), cùng nhánh `retrieve_law` (LLM đoán tên tội → Crime node → Law).
