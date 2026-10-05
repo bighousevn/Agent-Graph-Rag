@@ -4,6 +4,13 @@ with the HierarGraph and score them against data/qa/pilot_gold.json.
 
     python scripts/run_qa_pilot.py --dry-run     # what will run, rough cost; no LLM, no .env
     python scripts/run_qa_pilot.py --n 5
+    python scripts/run_qa_pilot.py --auto-gold --n 40 --tag tudong40
+
+--auto-gold: reference articles come from the lawyer's answer
+(vn_legal_graph/qa/auto_gold.py), not data/qa/pilot_gold.json. Only
+questions whose answer cites BLHS/BLTTHS are used: every one that repeats
+a TANDTC letter in the graph ("co_cong_van"), then the others in file order
+up to --n. Results are reported per group.
 
 Per question: features, candidate articles (4 routes), judge_law on each
 candidate, a short answer with structured crimes/articles, then scoring:
@@ -24,6 +31,7 @@ from vn_legal_graph.config import EmbeddingConfig
 from vn_legal_graph.embedding import CachedEmbedder, embedder_from_config
 from vn_legal_graph.graph.graph_db import HierarGraph
 from vn_legal_graph.prompts.vi import QA_GRADE_PROMPT
+from vn_legal_graph.qa.auto_gold import build_gold, khoan_precision
 from vn_legal_graph.qa.pipeline import DEFAULTS, answer_question
 from vn_legal_graph.qa.scoring import load_questions, parse_grade, question_text, references_text, score
 
@@ -39,25 +47,30 @@ def main() -> None:
     parser.add_argument("--dotenv-path", default=".env")
     parser.add_argument("--tag", default="", help="Suffix for the output file, e.g. lan2.")
     parser.add_argument("--loc-theo-judge", action="store_true", help="Original hard filter: answer only from accepted articles.")
+    parser.add_argument("--auto-gold", action="store_true", help="Reference articles from the lawyer's answer.")
+    parser.add_argument("--guidance-links", default="data/raw/guidance/guidance_links.json")
+    parser.add_argument("--cong-van-tay", default="data/qa/cong_van_tay.json")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-
-    gold = {g["qa_number"]: g for g in json.load(open(args.gold, encoding="utf-8"))["cau_hoi"]}
-    questions = load_questions(args.questions)[: args.n]
-    missing = [q["qa_number"] for q in questions if str(q["qa_number"]) not in gold]
-    if missing:
-        raise SystemExit(f"Thiếu đáp án chuẩn cho: {missing}")
 
     g = HierarGraph.load(args.graph)
     stats = g.stats()
     print(f"Graph: {stats['nodes']}")
+    if args.auto_gold:
+        questions, gold = auto_gold_questions(g, args)
+    else:
+        gold = {g_["qa_number"]: g_ for g_ in json.load(open(args.gold, encoding="utf-8"))["cau_hoi"]}
+        questions = load_questions(args.questions)[: args.n]
+    missing = [q["qa_number"] for q in questions if str(q["qa_number"]) not in gold]
+    if missing:
+        raise SystemExit(f"Thiếu đáp án chuẩn cho: {missing}")
     if args.dry_run:
         per_q = 1 + 1 + 2 * args.max_candidates + 1 + 1
         print(f"{len(questions)} câu × tối đa {per_q} lần gọi LLM "
               f"(đặc trưng, đoán tội, judge ≤{args.max_candidates} điều × 2, trả lời, chấm) "
               f"= tối đa {len(questions) * per_q} lần gọi, ước ~{len(questions) * 60_000:,} token đầu vào")
         for q in questions:
-            print(f"  #{q['qa_number']}: {q['title']}")
+            print(f"  #{q['qa_number']} [{gold[str(q['qa_number'])].get('nhom', '')}]: {q['title']}")
         return
 
     from vn_legal_graph.config import AppConfig
@@ -77,6 +90,8 @@ def main() -> None:
         trace = answer_question(g, question_text(q), client.generate, embedder.encode_long_text, run_cfg)
         pred = trace["tra_loi"]
         s = score(pred, gold[qid])
+        if args.auto_gold:
+            s["khoan_diem"] = khoan_precision(pred, gold[qid])
         grade = parse_grade(client.generate(
             QA_GRADE_PROMPT.format(question=question_text(q), reference=references_text(q["answer"]),
                                    answer=pred.get("cau_tra_loi", "")),
@@ -96,16 +111,49 @@ def main() -> None:
     with open(out, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
 
+    report(results, "Tổng", args.auto_gold)
+    if args.auto_gold:
+        for nhom in ("co_cong_van", "khong_cong_van"):
+            report([r for r in results if r["dap_an_chuan"]["nhom"] == nhom], nhom, True)
+    print(f"Đã ghi {out}")
+
+
+def report(results, label, auto) -> None:
     n = len(results)
+    if not n:
+        return
     mean = lambda k: sum(r["diem_tu_dong"][k] for r in results) / n
     kd = [r["diem_tu_dong"]["khoan_diem"] for r in results if r["diem_tu_dong"]["khoan_diem"] is not None]
     grades = [r["cham_ket_luan"]["diem"] if r["cham_ket_luan"] else "khong_doc_duoc" for r in results]
-    print(f"\n=== Tổng {n} câu ===")
+    crimes = (f"tội danh: precision {mean('toi_danh_precision'):.2f}" if auto else
+              f"tội danh: recall {mean('toi_danh_recall'):.2f}, precision {mean('toi_danh_precision'):.2f}")
+    print(f"\n=== {label}: {n} câu ===")
     print(f"Điều: recall {mean('dieu_recall'):.2f}, precision {mean('dieu_precision'):.2f} | "
-          f"khoản/điểm {sum(kd) / len(kd):.2f} ({len(kd)} câu có khoản) | "
-          f"tội danh: recall {mean('toi_danh_recall'):.2f}, precision {mean('toi_danh_precision'):.2f} | "
-          f"kết luận: {dict((x, grades.count(x)) for x in set(grades))} | độ dài TB {mean('so_tu'):.0f} từ")
-    print(f"Đã ghi {out}")
+          f"khoản/điểm {sum(kd) / len(kd) if kd else float('nan'):.2f} ({len(kd)} câu) | {crimes} | "
+          f"kết luận: {dict((x, grades.count(x)) for x in sorted(set(grades)))} | độ dài TB {mean('so_tu'):.0f} từ")
+
+
+def auto_gold_questions(g, args):
+    items = json.load(open(args.guidance_links, encoding="utf-8"))
+    manual = {k: v for k, v in json.load(open(args.cong_van_tay, encoding="utf-8")).items() if not k.startswith("_")}
+    letters = {re.match(r"Công văn (\d+)/", it["from"]).group(1) for it in items if re.match(r"Công văn (\d+)/", it["from"])}
+    crimes_of = {}
+    for node in g.nodes_of("Law"):
+        d = g.node(node)
+        key = f"{d.get('bo_luat', 'BLHS')}:{d['entry']}{d.get('suffix', '') or ''}"
+        crimes_of[key] = [g.node(c)["description"] for c in g.neighbors(node, "RELATED_CRIME")]
+    pool = []
+    for q in load_questions(args.questions):
+        gold = build_gold(q, items, letters, crimes_of, manual)
+        if gold["dieu_luat_bat_buoc"]:
+            pool.append((q, gold))
+    chosen = [p for p in pool if p[1]["nhom"] == "co_cong_van"]
+    chosen += [p for p in pool if p[1]["nhom"] == "khong_cong_van"][: max(0, args.n - len(chosen))]
+    order = {id(q): i for i, (q, _) in enumerate(pool)}
+    chosen.sort(key=lambda p: order[id(p[0])])
+    print(f"Đáp án tự động: {len(pool)} câu có trích BLHS/BLTTHS; chọn {len(chosen)} "
+          f"({sum(p[1]['nhom'] == 'co_cong_van' for p in chosen)} có Công văn)")
+    return [q for q, _ in chosen], {gold["qa_number"]: gold for _, gold in chosen}
 
 
 if __name__ == "__main__":

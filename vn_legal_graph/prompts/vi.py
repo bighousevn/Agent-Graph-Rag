@@ -253,8 +253,9 @@ Yêu cầu:
 4. Chỉ trích các điều luật và văn bản có trong phần tài liệu dưới đây; không trích văn bản không được cung cấp.
 5. Nếu có hướng dẫn áp dụng (Công văn) xử lý tình huống tương tự, ưu tiên làm theo hướng dẫn đó.
 6. Kết quả kiểm tra yếu tố cấu thành kèm theo mỗi điều chỉ để tham khảo; nó có thể sai với câu hỏi giả định hoặc hành vi mới ở mức chuẩn bị.
-7. Trả lời ngắn gọn, đi thẳng vào câu hỏi, không quá 120 từ, không chép lại nguyên văn điều luật.
-8. Nếu tài liệu được cung cấp không đủ để trả lời, nói rõ là không đủ căn cứ; không bịa điều luật.
+7. Câu đầu tiên của "cau_tra_loi" phải trả lời thẳng câu hỏi: "Có"/"Không", hoặc tên tội và khung (điều, khoản, điểm), hoặc việc phải làm. Không mở đầu bằng một khả năng mà câu sau lại bác bỏ (ví dụ không viết "Không bị truy cứu theo khoản 2…" rồi kết luận khoản 2). Các câu sau mới nêu căn cứ và lý do.
+8. Trả lời ngắn gọn, không quá 120 từ, không chép lại nguyên văn điều luật.
+9. Nếu tài liệu được cung cấp không đủ để trả lời, nói rõ là không đủ căn cứ; không bịa điều luật.
 
 Đầu ra là một đối tượng JSON duy nhất, không thêm chữ nào khác:
 {{
