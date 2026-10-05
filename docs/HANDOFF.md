@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 102 passed
+pytest tests/ -v                                        # kỳ vọng: 108 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -345,7 +345,14 @@ Diễn biến dài trung vị ~600 từ, tối đa 4.602 từ. Kiểm tra tự �
 
 Claude được tự chạy các bước không cần key: `--dry-run`, `build_graph.py`, `build_cases.py`, `pytest`.
 
-**Model:** lấy từ `LLM_MODEL` trong `.env`; mặc định `gpt-4o-mini`. Key: `LLM_API_KEY`, hoặc `OPENAI_API_KEY` (người dùng đang dùng biến này).
+**Model và nhà cung cấp:**
+- **Thứ tự chọn key:** `LLM_API_KEY` (kèm `LLM_PROVIDER`), rồi tới `DEEPSEEK_API_KEY`, rồi tới `OPENAI_API_KEY`.
+- **Từ 2026-10-05 người dùng có `DEEPSEEK_API_KEY`, nên các lần chạy LLM mới dùng DeepSeek:**
+  - base URL `https://api.deepseek.com`; model mặc định `deepseek-v4-pro` (DeepSeek-V4-Pro-0813); đổi bằng `LLM_MODEL=deepseek-flash` (DeepSeek-V4.1-Flash).
+  - Theo tài liệu DeepSeek tra ngày 2026-10-05: không còn `deepseek-chat` hay `deepseek-reasoner`; cả hai model đều bật thinking mặc định.
+  - **Thinking được tắt** (`extra_body={"thinking": {"type": "disabled"}}`) trừ khi đặt `LLM_THINKING=enabled`. Lý do: các câu trả lời đều ngắn, thinking bỏ qua `temperature`, và tài liệu không nói `max_tokens` có tính cả phần suy nghĩ hay không.
+- Đặc trưng án (Phase 3) và `judge_dep` đã chạy bằng `gpt-4o-mini`. Chỉ các lần chạy judge từ đây mới dùng DeepSeek.
+- Kết quả `judge_retrieval.py` giờ ghi vào `outputs/judge_law_<mode>[_khong_huong_dan]_<model>.json`. Các file cũ đã đổi tên thành `..._gpt-4o-mini.json`.
 
 **Quyền chạy:** bộ phân loại an toàn của Claude Code (chế độ auto) **chặn Claude chạy các lệnh gọi LLM**, dù người dùng đã bảo chạy. Người dùng tự chạy, hoặc thêm quy tắc `allow` cho đúng các script đó vào `.claude/settings.json`.
 

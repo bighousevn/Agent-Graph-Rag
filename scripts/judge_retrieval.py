@@ -19,6 +19,7 @@ import argparse
 import collections
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -109,6 +110,7 @@ def main() -> None:
     from vn_legal_graph.llm import LLMClient
 
     client = LLMClient(AppConfig.from_env_file(args.dotenv_path))
+    print(f"LLM: {client.llm_config.provider} / {client.llm_config.model}")
     decisions = {}
     for i, (p, a) in enumerate(jobs, 1):
         result = judge_law(client.generate, tests[p["id"]]["dien_bien"], laws[a], args.mode)
@@ -142,11 +144,13 @@ def main() -> None:
     unknown = sum(len(d["khong_ro"]) for ds in decisions.values() for d in ds.values())
     print(f"Không đọc được danh sách: {unreadable} | yếu tố không rõ: {unknown}")
 
-    out = f"outputs/judge_law_{args.mode}{'_khong_huong_dan' if args.no_guidance else ''}.json"
+    model_slug = re.sub(r"[^\w.-]", "_", client.llm_config.model)
+    out = f"outputs/judge_law_{args.mode}{'_khong_huong_dan' if args.no_guidance else ''}_{model_slug}.json"
     with open(out, "w", encoding="utf-8") as f:
         json.dump(
             {"mode": args.mode, "method": args.method, "candidates": args.candidates,
              "huong_dan": not args.no_guidance,
+             "model": client.llm_config.model, "provider": client.llm_config.provider,
              "metrics": {"truoc": res_before, "sau": res_after},
              "decisions": decisions, "predictions_sau": after},
             f, ensure_ascii=False, indent=2,

@@ -46,3 +46,36 @@ def test_explicit_max_tokens_is_part_of_cache_key(tmp_path):
     assert c.generate("p", max_tokens=4096) == "b"
     assert c._client.calls[1]["max_tokens"] == 4096
     assert c._cache_path("p") != c._cache_path("p", 4096)
+
+
+def test_deepseek_request_disables_thinking_by_default(tmp_path):
+    cfg = AppConfig(
+        llm=LLMConfig(api_key="fake", model="deepseek-v4-pro", provider="deepseek"), cache_dir=str(tmp_path)
+    )
+    c = LLMClient(cfg)
+    c._client = FakeOpenAI([("true", "stop")])
+    c.generate("p", max_tokens=16)
+    call = c._client.calls[0]
+    assert call["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert call["temperature"] == cfg.llm.temperature
+    assert call["max_tokens"] == 16
+
+
+def test_deepseek_thinking_enabled_drops_temperature_and_raises_limit(tmp_path):
+    cfg = AppConfig(
+        llm=LLMConfig(api_key="fake", model="deepseek-v4-pro", provider="deepseek", thinking="enabled"),
+        cache_dir=str(tmp_path),
+    )
+    c = LLMClient(cfg)
+    c._client = FakeOpenAI([("true", "stop")])
+    c.generate("p", max_tokens=16)
+    call = c._client.calls[0]
+    assert call["extra_body"] == {"thinking": {"type": "enabled"}}
+    assert "temperature" not in call
+    assert call["max_tokens"] >= 8192
+
+
+def test_openai_request_has_no_extra_body(tmp_path):
+    c = client_with(tmp_path, [("ok", "stop")])
+    c.generate("p")
+    assert "extra_body" not in c._client.calls[0]

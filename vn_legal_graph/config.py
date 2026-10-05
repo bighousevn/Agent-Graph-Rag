@@ -46,6 +46,31 @@ class LLMConfig:
     temperature: float = 0.1
     max_tokens: int = 1024
     timeout: int = 120
+    provider: str = "openai"  # "openai" | "deepseek"
+    # DeepSeek only: "disabled" (default) or "enabled". Thinking mode ignores
+    # temperature, and its effect on max_tokens is not documented.
+    thinking: str = "disabled"
+
+
+# Provider defaults, from https://api-docs.deepseek.com (checked 2026-10-05):
+# models "deepseek-flash" (DeepSeek-V4.1-Flash) and "deepseek-v4-pro"
+# (DeepSeek-V4-Pro-0813), both thinking by default.
+PROVIDER_DEFAULTS = {
+    "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini"},
+    "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-v4-pro"},
+}
+
+
+def _pick_provider_and_key() -> tuple:
+    """LLM_API_KEY (with LLM_PROVIDER, default openai) wins, then
+    DEEPSEEK_API_KEY, then OPENAI_API_KEY."""
+    explicit = _env("LLM_API_KEY", "")
+    if explicit:
+        return (_env("LLM_PROVIDER", "") or "openai"), explicit
+    deepseek = _env("DEEPSEEK_API_KEY", "")
+    if deepseek:
+        return "deepseek", deepseek
+    return (_env("LLM_PROVIDER", "") or "openai"), (_env("OPENAI_API_KEY", "") or "")
 
 
 @dataclass
@@ -81,11 +106,14 @@ class AppConfig:
         if load_dotenv is not None and os.path.exists(dotenv_path):
             load_dotenv(dotenv_path=dotenv_path, override=False)
 
+        provider, api_key = _pick_provider_and_key()
+        defaults = PROVIDER_DEFAULTS.get(provider, PROVIDER_DEFAULTS["openai"])
         llm = LLMConfig(
-            base_url=_env("LLM_BASE_URL", LLMConfig.base_url),
-            # LLM_API_KEY wins; OPENAI_API_KEY is accepted as the usual name.
-            api_key=_env("LLM_API_KEY", "") or _env("OPENAI_API_KEY", "") or "",
-            model=_env("LLM_MODEL", LLMConfig.model),
+            base_url=_env("LLM_BASE_URL", "") or defaults["base_url"],
+            api_key=api_key,
+            model=_env("LLM_MODEL", "") or defaults["model"],
+            provider=provider,
+            thinking=_env("LLM_THINKING", "") or "disabled",
             temperature=_env_float("LLM_TEMPERATURE", LLMConfig.temperature),
             max_tokens=_env_int("LLM_MAX_TOKENS", LLMConfig.max_tokens),
             timeout=_env_int("LLM_TIMEOUT", LLMConfig.timeout),

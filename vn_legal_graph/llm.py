@@ -60,6 +60,8 @@ class LLMClient:
         # written before this field existed (default limit) stay valid.
         if max_tokens is not None:
             fields["max_tokens"] = max_tokens
+        if self.llm_config.provider == "deepseek" and self.llm_config.thinking == "enabled":
+            fields["thinking"] = "enabled"
         key = json.dumps(
             fields,
             ensure_ascii=False,
@@ -69,6 +71,25 @@ class LLMClient:
         cache_dir = self.config.cache_dir
         os.makedirs(cache_dir, exist_ok=True)
         return os.path.join(cache_dir, f"{digest}.json")
+
+    def _request_kwargs(self, prompt: str, max_tokens: Optional[int]) -> dict:
+        cfg = self.llm_config
+        kwargs = {
+            "model": cfg.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens or cfg.max_tokens,
+            "timeout": cfg.timeout,
+        }
+        if cfg.provider == "deepseek":
+            # DeepSeek V4 models think by default; switched off unless asked,
+            # so short answers (true/false, JSON) are not eaten by reasoning
+            # and temperature still applies.
+            kwargs["extra_body"] = {"thinking": {"type": cfg.thinking}}
+            if cfg.thinking == "enabled":
+                kwargs["max_tokens"] = max(kwargs["max_tokens"], 8192)
+                return kwargs
+        kwargs["temperature"] = cfg.temperature
+        return kwargs
 
     def generate(
         self,
@@ -88,13 +109,7 @@ class LLMClient:
         last_error: Optional[Exception] = None
         for attempt in range(1, retries + 1):
             try:
-                resp = client.chat.completions.create(
-                    model=self.llm_config.model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=self.llm_config.temperature,
-                    max_tokens=max_tokens or self.llm_config.max_tokens,
-                    timeout=self.llm_config.timeout,
-                )
+                resp = client.chat.completions.create(**self._request_kwargs(prompt, max_tokens))
                 choice = resp.choices[0]
                 text = (choice.message.content or "").strip()
                 if choice.finish_reason == "length":
