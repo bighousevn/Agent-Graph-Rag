@@ -609,6 +609,21 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
 - **Lưu ý:** chỉ có 40 án test, 18 trong số đó là Điều 249; một án đổi kết quả làm R@1 tổng đổi 2,5 điểm.
 - Các phần khác của pipeline (đặc trưng, `judge_dep`) vẫn chạy bằng `gpt-4o-mini`.
 
+**Ablation hướng dẫn với `deepseek-flash` (`--no-guidance`, 40 án, 2026-10-05):**
+
+| cấu hình | R@1 | R@2 | Hit@1 | R@1 249 | R@1 251 | điều sai nhận | điều đúng bác |
+|---|---|---|---|---|---|---|---|
+| chỉ retrieval | 0,792 | 0,963 | 0,900 | 0,56 | 0,75 | — | — |
+| `gpt-4o-mini` + TTLT | 0,767 | 0,963 | 0,875 | 0,39 | 0,83 | 5/25 | 17/47 |
+| `deepseek-flash`, không TTLT | 0,867 | 0,963 | 0,975 | 0,78 | 0,75 | 1/25 | 6/47 |
+| `deepseek-flash` + TTLT | **0,892** | 0,963 | **1,000** | 0,78 | 0,83 | 0/25 | 6/47 |
+
+- **Phần lớn mức tăng đến từ judge_law với model đủ mạnh.** Không có TTLT vẫn sửa được cả 4 án sai 249 → 251.
+- **TTLT chỉ đổi kết quả ở đúng 1 án** (2078, nhãn 251):
+  - Không có TTLT: 249 bị chấp nhận nhầm.
+  - Có TTLT: cả 249 lẫn 251 đều bị bác, nên thứ tự quay về thứ tự retrieval (251 đứng đầu, đúng).
+  - → Với 40 án test, **chưa đủ bằng chứng để kết luận TTLT có ích**. Cần tập test lớn hơn.
+
 ### 9.5. Sau đó
 
 1. Port bước LLM xếp hạng lại án và cụm (`RERANK_*`), cùng nhánh `retrieve_law` (LLM đoán tên tội → Crime node → Law).
