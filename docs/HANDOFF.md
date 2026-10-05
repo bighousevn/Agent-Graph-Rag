@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 108 passed
+pytest tests/ -v                                        # kỳ vọng: 120 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -629,6 +629,55 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
 1. Port bước LLM xếp hạng lại án và cụm (`RERANK_*`), cùng nhánh `retrieve_law` (LLM đoán tên tội → Crime node → Law).
 2. Ablation tóm tắt cụm theo kiểu "nêu đặc điểm phân biệt" (mục 9.2).
 3. **Mở rộng:** cào congbobanan cho Chương XVI và các tội ma túy hiếm. Lưu ý lỗi SSL ở mục 3.
+
+## 11. Thử nghiệm hỏi–đáp pháp luật (questions.xlsx) — từ 2026-10-05
+
+**Bối cảnh:**
+- Người dùng thêm `data/raw/questions.xlsx`: 231 câu hỏi–đáp của luatvietnam.vn (197 câu thuộc mục Hình sự), gồm tiêu đề, câu hỏi, đáp án của luật sư và URL.
+- File này **chưa commit**, chờ người dùng quyết định.
+- Yêu cầu: làm giống bài báo nhưng trước tiên **thử 5 câu đầu**.
+- **Tiêu chí đúng:** trích đúng điều (khoản, điểm); đúng tội/luật; kết luận đúng; càng ngắn càng tốt.
+
+**Khác với bài toán của bài báo:** bài báo đoán tội danh từ tình tiết vụ án; đây là hỏi–đáp, có cả câu hỏi về thủ tục (câu 1 hỏi BLTTHS). Đáp án trích:
+- BLHS: 183/231 câu (riêng Điều 51 và 52: 62 câu);
+- Nghị định: 51; Nghị quyết: 49; BLDS: 23; BLTTHS: 20; Thông tư: 20;
+- Công văn TANDTC/VKSTC: 11.
+
+**Đã làm:**
+- **Tầng Luật = toàn bộ BLHS hợp nhất**: 407 điều, kể cả Phần chung (`build_law_layer.py --all-articles`). 314 điều tội phạm có node Tội danh.
+  - `judge_dep` sinh bằng `deepseek-flash`, chạy song song 8 luồng (`--workers`).
+  - 313/314 điều có câu hỏi. Điều 232 (khai thác rừng, 91 tình tiết) vẫn bị cắt ở 4.096 token.
+- **Graph:** 407 Law, 314 Crime, 257 Case (ViCSR), 10 Cluster, đã tóm tắt lại cụm.
+- **Mã node theo bộ luật:** BLHS giữ `law:249`; luật khác thành `law:bltths:155`. `build_law_layer.py --bo-luat BLTTHS` cho ra `law_bltths_vn.json`, nạp vào graph bằng `build_graph.py --extra-laws`.
+- **Quy trình** (`vn_legal_graph/qa/pipeline.py`):
+  1. đặc trưng câu hỏi;
+  2. 4 nhánh ứng viên: qua án, qua cụm, `retrieve_law` (LLM đoán tên tội), **so với nội dung điều luật** (nhánh thêm mới);
+  3. `judge_law` (dùng `JUDGE_LAW_SIMPLE_PROMPT` cho điều không có `judge_dep`);
+  4. **sinh câu trả lời ngắn** có tội danh và điều luật dạng có cấu trúc, thay cho `judge_crime_all`.
+  - Không tách theo bị cáo.
+- **Chấm điểm** (`vn_legal_graph/qa/scoring.py`): recall/precision theo điều (phân biệt BLHS và BLTTHS); khớp khoản/điểm; tên tội; LLM chấm kết luận so với đáp án của luật sư; số từ. Gold nằm ở `data/qa/pilot_gold.json`. **Đáp án không được đưa vào graph.**
+- CLI: `scripts/run_qa_pilot.py` (`--dry-run`). Kết quả ở `outputs/qa_pilot_<model>.json`.
+
+**Lần chạy 1 (5 câu, `deepseek-flash`, chưa có BLTTHS và Công văn):** 1 đúng, 2 đúng một phần, 2 sai. Điều: recall 0,60 / precision 0,70; khoản/điểm 0,50; tội danh 0,40; trung bình 65 từ.
+
+| câu | kết quả | nguyên nhân |
+|---|---|---|
+| 1. rút đơn khởi tố (BLTTHS 155) | một phần | graph không có BLTTHS; LLM tự trích "BLTTHS 155" từ trí nhớ và thêm điều kiện "thời hiệu" sai |
+| 2. đánh bạc qua app | một phần | trích đúng điểm c khoản 2 Điều 321 nhưng trả lời nước đôi ("có thể khoản 1… cần xác minh") |
+| 3. mang hung khí tìm đánh nhau | sai (318) | 134 có trong ứng viên nhưng judge_law cho **0/34** yếu tố đúng: tình huống ở mức chuẩn bị (khoản 6), còn câu hỏi yếu tố hỏi về thương tích đã xảy ra. Thiếu Công văn 163/250 |
+| 4. CCCD giả để lừa đảo | **đúng** | 174 (điểm a k4) và 341 (điểm b k3) đều đúng |
+| 5. nhân viên hộ kinh doanh | sai (353 k1) | judge_law bác **cả 8** ứng viên (175 được 0/20); câu trả lời dựa trên 3 ứng viên đầu và chọn tham ô. Thiếu kiến thức "hộ kinh doanh không phải doanh nghiệp" (Luật DN 2020) |
+
+**Nhận xét:**
+- Điều đúng **luôn có trong danh sách ứng viên** (trừ câu 1), nhờ nhánh LLM đoán tên tội.
+- Nhánh qua án và qua cụm vô dụng vì ViCSR chỉ có án ma túy và trộm cắp. Nhánh so với nội dung điều luật trả về nhiều điều nhiễu.
+- **judge_law là chỗ hỏng chính**: bộ câu hỏi yếu tố viết cho tình tiết vụ án đã xảy ra, không hợp với câu hỏi giả định hay tình huống chuẩn bị phạm tội.
+
+**Đề xuất cho lần chạy 2 (chờ người dùng):**
+1. Nạp BLTTHS và Công văn 163/TANDTC-PC (2024), 250/TANDTC-PC, 01/TANDTC-PC (2026).
+2. Bước trả lời nhận tất cả ứng viên, kèm kết quả judge làm gợi ý thay vì lọc cứng.
+3. Prompt trả lời: kết luận dứt khoát khi đủ dữ kiện; chỉ trích văn bản có trong tài liệu được cung cấp.
+4. Cân nhắc thêm Luật Doanh nghiệp 2020 (định nghĩa doanh nghiệp, hộ kinh doanh).
 
 ## 10. Tham chiếu
 
