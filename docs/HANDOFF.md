@@ -35,7 +35,7 @@ Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR).
 git checkout claude/legalgraphrag-framework-hv23z3
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pytest tests/ -v                                        # kỳ vọng: 120 passed
+pytest tests/ -v                                        # kỳ vọng: 122 passed
 python scripts/build_law_layer.py --chapters XVI XX --dry-run
 #   -> "26 Điều parsed, 26 are crime ('Tội ...') articles."
 ```
@@ -678,6 +678,46 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
 2. Bước trả lời nhận tất cả ứng viên, kèm kết quả judge làm gợi ý thay vì lọc cứng.
 3. Prompt trả lời: kết luận dứt khoát khi đủ dữ kiện; chỉ trích văn bản có trong tài liệu được cung cấp.
 4. Cân nhắc thêm Luật Doanh nghiệp 2020 (định nghĩa doanh nghiệp, hộ kinh doanh).
+
+### 11.1. Nguồn luật mới (2026-10-05) và lần chạy 2
+
+**Nguồn (theo yêu cầu người dùng):**
+- **BLTTHS hợp nhất 2026** (17/VBHN-VPQH): `data/raw/law/2026_17_VBHN-VPQH_BLTTHS.docx`, 492 điều.
+  - Người dùng tưởng đây là BLHS.
+  - Các điều 413–430 và 446 không còn trong văn bản.
+  - File có tên thành phần dạng `\`; `parse_blhs._docx_source` xử lý được.
+- **3 Công văn TANDTC** trong `data/raw/guidance/`: 163/TANDTC-PC (10/09/2024), 250/TANDTC-PC (28/04/2026), 01/TANDTC-PC (05/01/2026).
+  - `guidance_congvan.py` tách thành 31 mục hình sự, rồi gắn vào điều luật theo cách phân biệt bộ luật (`BLHS:134`, `BLTTHS:155`).
+- **Đã xoá theo yêu cầu:** BLHS bản gốc 2015, TTLT 17/2007 và 08/2015 (cùng code trích TTLT), file tải nhầm 01/2017.
+- **BLHS hiện vẫn là `11_VBHN`.** File BLHS 2025 (135/VBHN-VPQH, có Luật 86/2025) người dùng đưa chỉ là **Công báo số 1351+1352, gồm Điều 1–68** ("Xem tiếp Công báo số 1353 + 1354"). File gốc `.doc` nằm ở `data/raw/law/`, chưa commit.
+  - **Chờ người dùng gửi bản đầy đủ** để thay `11_VBHN`. Khi thay phải chạy lại `judge_dep`.
+  - Bản BLHS 2025 có thêm Điều 256a, mà Công văn 250 có trích.
+- Graph: **899 Law** (407 BLHS + 492 BLTTHS), 314 Crime, 257 Case, 10 Cluster.
+
+**Sửa ở bước trả lời:**
+- Mọi ứng viên đều được đưa vào bước trả lời, mỗi điều kèm kết quả judge làm gợi ý (`loc_theo_judge=False`; tuỳ chọn `--loc-theo-judge` giữ cách lọc cứng của bài gốc).
+- Prompt yêu cầu: kết luận dứt khoát; chỉ trích văn bản được cung cấp; ưu tiên Công văn.
+
+**Lần chạy 2** (`outputs/qa_pilot_deepseek-flash_lan2.json`; lần 1 lưu ở `..._lan1.json`):
+
+| | lần 1 | lần 2 |
+|---|---|---|
+| kết luận đúng (LLM chấm) | 1 đúng / 2 một phần / 2 sai | **5/5 đúng** |
+| điều: recall / precision | 0,60 / 0,70 | **1,00 / 0,90** |
+| khoản/điểm | 0,50 | **1,00** |
+| tội danh | 0,40 | 0,80 |
+| số từ trung bình | 65 | 74 |
+
+**Lưu ý khi đọc kết quả:**
+- **Câu 2:** câu đầu "Không khởi tố theo khoản 2" mâu thuẫn với kết luận "khoản 2 Điều 321". LLM chấm vẫn cho "dung". → Cần sửa prompt: câu đầu tiên phải trả lời thẳng câu hỏi.
+- **Câu 3, 4, 5 trích nguyên Công văn** (250 mục 17; 163 mục 6; 163 mục 4). Các câu hỏi luatvietnam này được lấy từ chính các Công văn đó, nên **kết quả lạc quan**. Nó chứng minh cơ chế gắn văn bản hướng dẫn hoạt động, nhưng chưa nói lên khả năng với câu hỏi không có Công văn giải đáp sẵn.
+- Tội danh 0,80 là do câu 1 nêu thêm "Tội làm nhục người khác". Điều này hợp lý với tình huống, nhưng gold của câu hỏi thủ tục không có tội danh.
+- Mẫu chỉ có 5 câu.
+
+**Bước tiếp theo đề xuất:**
+1. Sửa prompt để câu đầu trả lời thẳng.
+2. Mở rộng đánh giá lên 20–50 câu: gold tự động (trích "Điều N … BLHS/BLTTHS" từ đáp án luật sư) và LLM chấm kết luận, có người duyệt mẫu. Báo riêng nhóm câu có và không có Công văn giải đáp sẵn.
+3. Thay BLHS bằng bản 2025 đầy đủ khi có file.
 
 ## 10. Tham chiếu
 
