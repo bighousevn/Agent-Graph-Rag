@@ -63,6 +63,12 @@ def main() -> None:
     )
     parser.add_argument("--workers", type=int, default=8, help="Parallel LLM calls for judge_dep.")
     parser.add_argument(
+        "--bo-luat", default="BLHS",
+        help="Code of the .docx (BLHS, BLTTHS, ...). Anything but BLHS is written to "
+        "law_<code>_vn.json with every article, no crimes and no judge_dep; add it to "
+        "the graph with build_graph.py --extra-laws.",
+    )
+    parser.add_argument(
         "--all-articles",
         action="store_true",
         help="Keep every Điều as a Law entry (general part too), not only crime articles.",
@@ -93,6 +99,16 @@ def main() -> None:
 
     if args.dry_run:
         print("Dry run requested: stopping before LLM calls (judge_dep).")
+        return
+
+    if args.bo_luat != "BLHS":
+        for a in article_dicts:
+            a["judge_dep"] = []
+        article_dicts = link_articles(article_dicts, [])
+        out = os.path.join(args.output_dir, f"law_{args.bo_luat.lower()}_vn.json")
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump(build_law_to_crime(article_dicts, include_all=True, bo_luat=args.bo_luat), f, ensure_ascii=False, indent=2)
+        print(f"{args.bo_luat}: {len(article_dicts)} Điều -> {out} (không có tội danh, không judge_dep)")
         return
 
     if args.skip_judge_dep:

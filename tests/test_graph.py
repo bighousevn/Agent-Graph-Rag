@@ -143,3 +143,12 @@ def test_general_part_article_has_no_crime_node():
     assert "law:51" in g.graph and "crime:51" not in g.graph
     assert g.neighbors("law:51", "RELATED_CRIME") == []
     assert g.node("law:51")["title"] == "Các tình tiết giảm nhẹ trách nhiệm hình sự"
+
+
+def test_other_code_is_namespaced():
+    laws = LAWS + [{"id": 155, "suffix": "", "bo_luat": "BLTTHS", "title": "Khởi tố vụ án hình sự theo yêu cầu của bị hại",
+                    "items": [{"text": "Điều 155. Khởi tố ...", "crime": [], "judge_dep": [], "related_laws": []}]}]
+    g, _ = build_base_graph(laws, [], fake_embed)
+    assert "law:bltths:155" in g.graph and "law:155" not in g.graph
+    assert g.node("law:bltths:155")["bo_luat"] == "BLTTHS"
+    assert g.node("law:249")["bo_luat"] == "BLHS"

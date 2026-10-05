@@ -31,8 +31,12 @@ from .graph_db import HierarGraph
 Embed = Callable[[str], np.ndarray]
 
 
-def law_id(entry: int, suffix: str = "") -> str:
-    return f"law:{entry}{suffix}"
+def law_id(entry: int, suffix: str = "", bo_luat: str = "BLHS") -> str:
+    """BLHS keeps the short id ("law:249"); other codes are namespaced
+    ("law:bltths:155"), since BLTTHS Điều 155 is not BLHS Điều 155."""
+    if bo_luat == "BLHS":
+        return f"law:{entry}{suffix}"
+    return f"law:{bo_luat.lower()}:{entry}{suffix}"
 
 
 def crime_id(entry: int, suffix: str = "") -> str:
@@ -52,7 +56,8 @@ def build_base_graph(
     for law in law_to_crime:
         item = law["items"][0]
         suffix = law.get("suffix", "")
-        lid, cid = law_id(law["id"], suffix), crime_id(law["id"], suffix)
+        bo_luat = law.get("bo_luat", "BLHS")
+        lid, cid = law_id(law["id"], suffix, bo_luat), crime_id(law["id"], suffix)
         g.add_node(
             lid,
             "Law",
@@ -64,6 +69,8 @@ def build_base_graph(
             related_laws=item.get("related_laws", []),
             insights="",
             title=law.get("title", ""),
+            bo_luat=bo_luat,
+            suffix=suffix,
         )
         if item["crime"]:  # general-part articles (include_all) have no crime
             crime_title = item["crime"][0]

@@ -46,6 +46,10 @@ def load(path):
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--data-dir", default="data/processed")
+    parser.add_argument(
+        "--extra-laws", nargs="*", default=[],
+        help="More law_to_crime-style files to add as Law nodes, e.g. the BLTTHS layer.",
+    )
     parser.add_argument("--output", default="outputs/hierargraph.pkl")
     parser.add_argument("--embedding-backend", default=EmbeddingConfig.backend)
     parser.add_argument("--embedding-model", default=EmbeddingConfig.model_name)
@@ -56,6 +60,8 @@ def main() -> None:
     args = parser.parse_args()
 
     law_to_crime = load(os.path.join(args.data_dir, "law_to_crime_vn.json"))
+    for path in args.extra_laws:
+        law_to_crime += load(path)
     cases = load(os.path.join(args.data_dir, "cases_vn_features.json"))
     summaries_path = os.path.join(args.data_dir, "cluster_summaries.json")
     summaries = load(summaries_path) if os.path.exists(summaries_path) else {}
