@@ -1,4 +1,6 @@
 """Tests for vn_legal_graph.law.guidance_congvan and code-aware linking."""
+import json
+
 from vn_legal_graph.law.guidance_congvan import law_refs, letter_metadata, split_items
 from vn_legal_graph.law.link_guidance import attach_guidance_links
 
@@ -45,3 +47,16 @@ def test_attach_is_code_aware():
     assert [r["id"] for r in blhs_155] == ["CV 2"]
     assert [r["id"] for r in bltths_155] == ["CV 1"]
     assert [r["id"] for r in attach_guidance_links({"id": 134, "suffix": ""}, links)] == ["CV 2"]
+
+
+def test_crime_title_index_keeps_suffix(tmp_path):
+    from vn_legal_graph.law.guidance_congvan import crime_title_index
+
+    path = tmp_path / "law.json"
+    path.write_text(json.dumps([
+        {"id": 256, "suffix": "", "items": [{"crime": ["Tội chứa chấp việc sử dụng trái phép chất ma túy"]}]},
+        {"id": 256, "suffix": "a", "items": [{"crime": ["Tội sử dụng trái phép chất ma túy"]}]},
+    ], ensure_ascii=False), encoding="utf-8")
+    titles = crime_title_index(str(path))
+    assert titles["tội sử dụng trái phép chất ma túy"] == "256a"
+    assert law_refs("Về Tội sử dụng trái phép chất ma túy theo Điều 256a Bộ luật Hình sự", titles) == ["BLHS:256a"]

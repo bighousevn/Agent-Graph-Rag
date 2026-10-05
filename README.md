@@ -28,7 +28,7 @@ Hai chương thử nghiệm: **Chương XVI** (Điều 168–180, xâm phạm s�
 
 **Chưa làm:** thu thập bản án (Phase 2), tầng Case và lắp ráp graph hoàn chỉnh (Phase 3), kiểm định truy xuất (Phase 4), các agent (Phase 5+).
 
-**Nguồn luật:** `data/raw/law/11_VBHN-VPQH_650257.docx` là **Văn bản hợp nhất số 11/VBHN-VPQH** của BLHS 2015, đã gộp các sửa đổi của Luật 12/2017/QH14 và Luật 59/2024/QH15, **chưa gồm Luật 86/2025/QH15**. Bản này khớp với luật mà các bản án trong ViCSR (2017–2022) áp dụng. File `100_2015_QH13_296661.docx` (bản gốc 2015) chỉ giữ để đối chiếu.
+**Nguồn luật:** BLHS là **Văn bản hợp nhất số 135/VBHN-VPQH ngày 05/9/2025** (gộp Luật 12/2017/QH14, Luật 59/2024/QH15 và Luật 86/2025/QH15), tải từ Công báo Chính phủ (congbao.chinhphu.vn), số 1351+1352 đến 1357+1358. Bốn số Công báo là 4 file `data/raw/law/2025_135_VBHN-VPQH_BLHS_p1..p4.docx` (chuyển từ .doc bằng LibreOffice), được parse nối tiếp thành 408 điều (có Điều 256a). BLTTHS là `2026_17_VBHN-VPQH_BLTTHS.docx`. Lưu ý: các bản án ViCSR (2017–2022) xử theo luật trước Luật 86/2025; 55 điều có nội dung khác bản cũ (chủ yếu tội ma túy, bỏ tử hình ở 8 tội).
 
 ## Cài đặt
 

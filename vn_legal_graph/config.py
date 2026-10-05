@@ -85,7 +85,9 @@ class EmbeddingConfig:
 
 @dataclass
 class PathsConfig:
-    raw_law_docx: str = "data/raw/law/11_VBHN-VPQH_650257.docx"
+    # First of the four Công báo issues (..._p1..p4.docx) of 135/VBHN-VPQH;
+    # scripts/build_law_layer.py reads all four.
+    raw_law_docx: str = "data/raw/law/2025_135_VBHN-VPQH_BLHS_p1.docx"
     raw_guidance_dir: str = "data/raw/guidance"
     raw_cases_dir: str = "data/raw/cases"
     processed_dir: str = "data/processed"

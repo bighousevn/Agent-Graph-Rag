@@ -173,3 +173,36 @@ def test_docx_with_backslash_member_names(tmp_path):
             name = info.filename if info.filename.startswith("[Content_Types]") or info.filename.startswith("_rels") else info.filename.replace("/", "\\")
             zout.writestr(name, zin.read(info.filename))
     assert "Điều 1. Nhiệm vụ của Bộ luật hình sự" in load_paragraphs_from_docx(str(bad))
+
+
+def test_join_gazette_parts():
+    # 135/VBHN-VPQH is spread over Công báo 1351-1358; issue 2 starts in the
+    # middle of a chapter ("Mục 3"), so the issues are parsed as one text.
+    from vn_legal_graph.law.parse_blhs import join_gazette_parts
+
+    part1 = [
+        "Phần thứ hai", "CÁC TỘI PHẠM", "Chương XXI", "CÁC TỘI XÂM PHẠM AN TOÀN CÔNG CỘNG",
+        "Điều 255. Tội tổ chức sử dụng trái phép chất ma túy",
+        "1. Người nào tổ chức sử dụng trái phép chất ma túy dưới bất kỳ hình thức nào,",
+        "(Xem tiếp Công báo số 1357 + 1358)",
+    ]
+    part2 = [
+        "VĂN BẢN KHÁC", "VĂN BẢN HỢP NHẤT - VĂN PHÒNG QUỐC HỘI",
+        "Văn bản hợp nhất số 135/VBHN-VPQH ngày 05 tháng 9 năm 2025", "hợp nhất Bộ luật Hình sự",
+        "(Tiếp theo Công báo số 1355 + 1356)",
+        "thì bị phạt tù từ 02 năm đến 07 năm.",
+        "Mục 2",
+        "TỘI PHẠM KHÁC",
+        "XÂM PHẠM AN TOÀN",
+        "Điều 256a. Tội sử dụng trái phép chất ma túy",
+        "1. Người nào sử dụng trái phép chất ma túy ...",
+    ]
+    arts = parse_paragraphs(join_gazette_parts([part1, part2]))
+    assert [a.entry_label for a in arts] == ["255", "256a"]
+    d255 = arts[0].full_text()
+    assert d255.endswith("dưới bất kỳ hình thức nào, thì bị phạt tù từ 02 năm đến 07 năm.")
+    assert "Công báo" not in d255 and "VĂN BẢN" not in d255
+    assert arts[1].chuong == "XXI" and arts[1].phan == "Phần thứ hai"
+    assert (arts[1].muc, arts[1].muc_title) == ("2", "TỘI PHẠM KHÁC XÂM PHẠM AN TOÀN") and arts[0].muc is None
+    with pytest.raises(ValueError):
+        join_gazette_parts([part1, ["Điều 256a. Tội sử dụng trái phép chất ma túy"]])

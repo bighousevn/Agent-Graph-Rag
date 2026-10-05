@@ -9,7 +9,7 @@ hierarchy instead of flattening straight to "entry" numbers.
 
 Usage:
     python -m vn_legal_graph.law.parse_blhs \
-        --docx data/raw/law/11_VBHN-VPQH_650257.docx \
+        --docx data/raw/law/2025_135_VBHN-VPQH_BLHS_p*.docx \
         --output data/processed/criminal_law_vn.json
 
 Known data quirk handled here: some legacy .docx exports of Vietnamese
@@ -119,6 +119,8 @@ class Dieu:
 PHAN_RE = re.compile(r"^Phần\s+thứ\s+\S+$", re.IGNORECASE)
 CHUONG_RE = re.compile(r"^Chương\s+[IVXLCDM]+$")
 MUC_RE = re.compile(r"^Mục\s+(\d+)\.\s*(.+)$")
+# Công báo prints the Mục heading on two lines: "Mục 3" then its title.
+MUC_ALONE_RE = re.compile(r"^Mục\s+(\d+)\.?$")
 DIEU_RE = re.compile(r"^Điều\s+(\d+)([a-zđ]?)\.\s*(.+)$", re.IGNORECASE)
 # Footnote reference inside the text ("d)[3] Nghiêm trị", "Điều 51.[7]") and
 # footnote body at the end of a consolidated text ("[3] Điểm này được ...").
@@ -153,7 +155,7 @@ def parse_paragraphs(paragraphs: List[str]) -> List[Dieu]:
     cur_khoan: Optional[Khoan] = None
 
     # State for "the next non-empty paragraph is a title line" cases.
-    expect_title_for: Optional[str] = None  # "phan" | "chuong"
+    expect_title_for: Optional[str] = None  # "phan" | "chuong" | "muc"
 
     def flush_article():
         nonlocal cur_article
@@ -183,6 +185,16 @@ def parse_paragraphs(paragraphs: List[str]) -> List[Dieu]:
             cur_muc_title = None
             expect_title_for = None
             continue
+        if expect_title_for == "muc":
+            cur_muc_title = line
+            expect_title_for = "muc_more"
+            continue
+        if expect_title_for == "muc_more":
+            expect_title_for = None
+            # A long title wraps onto a second upper-case line.
+            if line.isupper() and not DIEU_RE.match(line):
+                cur_muc_title = f"{cur_muc_title} {line}"
+                continue
         if expect_title_for == "chuong":
             cur_chuong_title = line
             cur_muc = None
@@ -203,6 +215,14 @@ def parse_paragraphs(paragraphs: List[str]) -> List[Dieu]:
             cur_khoan = None
             cur_chuong = _extract_chuong_numeral(line)
             expect_title_for = "chuong"
+            continue
+
+        m = MUC_ALONE_RE.match(line)
+        if m:
+            flush_article()
+            cur_khoan = None
+            cur_muc = m.group(1)
+            expect_title_for = "muc"
             continue
 
         m = MUC_RE.match(line)
@@ -298,9 +318,36 @@ def _docx_source(path: str):
     return buf
 
 
-def parse_docx(path: str) -> List[Dieu]:
-    paragraphs = load_paragraphs_from_docx(path)
-    return parse_paragraphs(paragraphs)
+# Công báo splits a long text over several issues. Each issue ends with
+# "(Xem tiếp Công báo số 1353 + 1354)" and the next one starts with a
+# header block that ends in "(Tiếp theo Công báo số 1351 + 1352)".
+GAZETTE_NEXT_RE = re.compile(r"^\(Xem tiếp Công báo số [\d +]+\)$")
+GAZETTE_CONT_RE = re.compile(r"^\(Tiếp theo Công báo số [\d +]+\)$")
+
+
+def join_gazette_parts(parts: List[List[str]]) -> List[str]:
+    """Concatenate the paragraphs of consecutive Công báo issues, dropping
+    the "(Xem tiếp ...)" line and the header block of each continuation
+    issue; otherwise they would be appended to the last Điều of an issue."""
+    out: List[str] = []
+    for i, paragraphs in enumerate(parts):
+        if i > 0:
+            cont = next((j for j, p in enumerate(paragraphs) if GAZETTE_CONT_RE.match(p.strip())), None)
+            if cont is None:
+                raise ValueError(f"Phần {i + 1} không có dòng '(Tiếp theo Công báo số ...)'")
+            paragraphs = paragraphs[cont + 1 :]
+        out += [p for p in paragraphs if not GAZETTE_NEXT_RE.match(p.strip())]
+    return out
+
+
+def parse_docx(path) -> List[Dieu]:
+    """One .docx, or a list of .docx files that are consecutive Công báo
+    issues of the same text, in order."""
+    if isinstance(path, (list, tuple)):
+        if len(path) == 1:
+            return parse_docx(path[0])
+        return parse_paragraphs(join_gazette_parts([load_paragraphs_from_docx(p) for p in path]))
+    return parse_paragraphs(load_paragraphs_from_docx(path))
 
 
 # --------------------------------------------------------------------------
@@ -323,7 +370,7 @@ def save_json(articles: List[Dieu], output_path: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--docx", required=True, help="Path to the BLHS .docx file.")
+    parser.add_argument("--docx", required=True, nargs="+", help="BLHS .docx file(s); several = Công báo issues in order.")
     parser.add_argument(
         "--output",
         default="data/processed/criminal_law_vn.json",

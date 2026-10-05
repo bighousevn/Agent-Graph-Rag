@@ -34,8 +34,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--docx",
-        default="data/raw/law/11_VBHN-VPQH_650257.docx",
-        help="Path to the BLHS .docx source.",
+        nargs="+",
+        default=[f"data/raw/law/2025_135_VBHN-VPQH_BLHS_p{i}.docx" for i in range(1, 5)],
+        help="BLHS .docx source; several files = consecutive Công báo issues, in order "
+        "(default: Văn bản hợp nhất 135/VBHN-VPQH 2025, Công báo 1351-1358).",
     )
     parser.add_argument(
         "--chapters",

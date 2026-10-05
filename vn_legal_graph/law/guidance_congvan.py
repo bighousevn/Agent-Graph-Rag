@@ -82,7 +82,7 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", " ", s.lower())).strip()
 
 
-def law_refs(text: str, crime_titles: Dict[str, int]) -> List[str]:
+def law_refs(text: str, crime_titles: Dict[str, str]) -> List[str]:
     refs: List[str] = []
     for m in ARTICLE_REF_RE.finditer(text):
         ref = f"{CODE_OF[m.group(2).lower()]}:{m.group(1).lower()}"
@@ -97,7 +97,7 @@ def law_refs(text: str, crime_titles: Dict[str, int]) -> List[str]:
     return refs
 
 
-def crime_title_index(law_json: str) -> Dict[str, int]:
+def crime_title_index(law_json: str) -> Dict[str, str]:
     """Normalised BLHS crime titles ("tội lừa đảo chiếm đoạt tài sản") ->
     article. Titles of 4 words or fewer are skipped: "Tội giết người" would
     match "tội giết người hoặc ..." inside unrelated items."""
@@ -108,11 +108,11 @@ def crime_title_index(law_json: str) -> Dict[str, int]:
         for crime in law["items"][0].get("crime", []):
             t = _norm(crime)
             if len(t.split()) > 4:
-                out[t] = law["id"]
+                out[t] = f"{law['id']}{law.get('suffix') or ''}"  # 256a, not 256
     return out
 
 
-def links_from_letter(path: str, crime_titles: Dict[str, int]) -> List[Dict]:
+def links_from_letter(path: str, crime_titles: Dict[str, str]) -> List[Dict]:
     import docx  # metadata sits in the header table
 
     from .parse_blhs import _docx_source
