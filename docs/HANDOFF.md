@@ -591,6 +591,24 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
   - (b) Dùng model mạnh hơn cho judge (đổi `LLM_MODEL`), như một ablation.
   - (c) Ghi nhận kết quả và chuyển sang các bước khác (rerank, `retrieve_law`, tách theo bị cáo).
 
+**Chạy đủ 40 án với `deepseek-flash` (gop, có TTLT, thinking tắt, 2026-10-05) — KẾT QUẢ CHÍNH:**
+
+| | chỉ retrieval | + judge `gpt-4o-mini` | **+ judge `deepseek-flash`** |
+|---|---|---|---|
+| R@1 | 0,792 | 0,767 | **0,892** |
+| R@2 | 0,963 | 0,963 | 0,963 |
+| Hit@1 | 0,900 | 0,875 | **1,000** (40/40) |
+| R@1 điều 249 | 0,56 | 0,39 | **0,78** |
+| điều sai được chấp nhận | — | 5/25 | **0/25** |
+| điều đúng bị bác | — | 17/47 | **6/47** |
+
+- **Sửa được cả 4 án sai top-1** (1463, 2119, 2196, 8265): bác 251, chấp nhận 249. Không làm hỏng án nào.
+- 6 điều đúng bị bác: 5 nằm trong án nhiều tội (do chưa tách theo bị cáo), 1 trong án một tội (2078, Điều 251; top-1 vẫn đúng).
+- R@1 riêng điều 173 giảm 0,70 → 0,60 chỉ vì cách đo: ở án 10971 (3 tội), 251 lên đầu thay 173. Hit@1 vẫn 40/40.
+- **Kết luận:** lỗi ở bước tổng hợp cuối của `gpt-4o-mini` là lỗi **năng lực model**, không phải lỗi thiết kế. Với `deepseek-flash`, judge_law như bài gốc (cộng 2 quy tắc đã thêm và TTLT) cải thiện R@1 thêm 10 điểm.
+- **Lưu ý:** chỉ có 40 án test, 18 trong số đó là Điều 249; một án đổi kết quả làm R@1 tổng đổi 2,5 điểm.
+- Các phần khác của pipeline (đặc trưng, `judge_dep`) vẫn chạy bằng `gpt-4o-mini`.
+
 ### 9.5. Sau đó
 
 1. Port bước LLM xếp hạng lại án và cụm (`RERANK_*`), cùng nhánh `retrieve_law` (LLM đoán tên tội → Crime node → Law).
