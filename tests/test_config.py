@@ -35,15 +35,15 @@ def test_deepseek_key_selects_deepseek_over_openai(monkeypatch):
     llm = AppConfig.from_env_file(NO_DOTENV).llm
     assert (llm.provider, llm.api_key) == ("deepseek", "sk-deepseek")
     assert llm.base_url == "https://api.deepseek.com"
-    assert llm.model == "deepseek-v4-pro"
+    assert llm.model == "deepseek-flash"
     assert llm.thinking == "disabled"
 
 
 def test_deepseek_model_override(monkeypatch):
     _clear(monkeypatch)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-deepseek")
-    monkeypatch.setenv("LLM_MODEL", "deepseek-flash")
-    assert AppConfig.from_env_file(NO_DOTENV).llm.model == "deepseek-flash"
+    monkeypatch.setenv("LLM_MODEL", "deepseek-v4-pro")
+    assert AppConfig.from_env_file(NO_DOTENV).llm.model == "deepseek-v4-pro"
 
 
 def test_openai_defaults_unchanged(monkeypatch):

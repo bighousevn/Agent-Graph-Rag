@@ -348,7 +348,7 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
 **Model và nhà cung cấp:**
 - **Thứ tự chọn key:** `LLM_API_KEY` (kèm `LLM_PROVIDER`), rồi tới `DEEPSEEK_API_KEY`, rồi tới `OPENAI_API_KEY`.
 - **Từ 2026-10-05 người dùng có `DEEPSEEK_API_KEY`, nên các lần chạy LLM mới dùng DeepSeek:**
-  - base URL `https://api.deepseek.com`; model mặc định `deepseek-v4-pro` (DeepSeek-V4-Pro-0813); đổi bằng `LLM_MODEL=deepseek-flash` (DeepSeek-V4.1-Flash).
+  - base URL `https://api.deepseek.com`; **model mặc định `deepseek-flash`** (DeepSeek-V4.1-Flash, người dùng chọn); đổi sang `LLM_MODEL=deepseek-v4-pro` (DeepSeek-V4-Pro-0813) nếu cần.
   - Theo tài liệu DeepSeek tra ngày 2026-10-05: không còn `deepseek-chat` hay `deepseek-reasoner`; cả hai model đều bật thinking mặc định.
   - **Thinking được tắt** (`extra_body={"thinking": {"type": "disabled"}}`) trừ khi đặt `LLM_THINKING=enabled`. Lý do: các câu trả lời đều ngắn, thinking bỏ qua `temperature`, và tài liệu không nói `max_tokens` có tính cả phần suy nghĩ hay không.
 - Đặc trưng án (Phase 3) và `judge_dep` đã chạy bằng `gpt-4o-mini`. Chỉ các lần chạy judge từ đây mới dùng DeepSeek.

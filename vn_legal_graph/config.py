@@ -57,7 +57,7 @@ class LLMConfig:
 # (DeepSeek-V4-Pro-0813), both thinking by default.
 PROVIDER_DEFAULTS = {
     "openai": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini"},
-    "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-v4-pro"},
+    "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-flash"},  # user choice 2026-10-05
 }
 
 
