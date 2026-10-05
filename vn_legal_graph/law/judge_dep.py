@@ -56,41 +56,52 @@ def generate_judge_dep_for_article(client: LLMClient, dieu_text: str) -> List[st
     return questions
 
 
-def annotate_articles(
-    articles: List[Dict[str, Any]], client: LLMClient
-) -> List[Dict[str, Any]]:
+def _article_text(article: Dict[str, Any]) -> str:
     from .parse_blhs import Dieu, Khoan, Diem  # local import to avoid cycles
 
+    # Rebuild a Dieu just to reuse full_text(); cheap and avoids
+    # duplicating the rendering logic here.
+    khoan_objs = [
+        Khoan(so=k["so"], text=k["text"], diem=[Diem(**d) for d in k["diem"]])
+        for k in article["khoan"]
+    ]
+    return Dieu(
+        id=article["id"],
+        suffix=article["suffix"],
+        title=article["title"],
+        phan=article["phan"],
+        phan_title=article["phan_title"],
+        chuong=article["chuong"],
+        chuong_title=article["chuong_title"],
+        muc=article.get("muc"),
+        muc_title=article.get("muc_title"),
+        khoan=khoan_objs,
+        preamble=article.get("preamble", ""),
+    ).full_text()
+
+
+def annotate_articles(
+    articles: List[Dict[str, Any]], client: LLMClient, workers: int = 1
+) -> List[Dict[str, Any]]:
+    """Fill ``judge_dep`` for crime articles (others get []). With
+    ``workers`` > 1 the LLM calls run in parallel threads; one call per
+    article, results kept in article order."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    todo = []
     for article in articles:
-        if not article.get("title", "").strip().startswith("Tội"):
+        if article.get("title", "").strip().startswith("Tội"):
+            todo.append(article)
+        else:
             article["judge_dep"] = []
-            continue
-        # Rebuild a Dieu just to reuse full_text(); cheap and avoids
-        # duplicating the rendering logic here.
-        khoan_objs = [
-            Khoan(
-                so=k["so"],
-                text=k["text"],
-                diem=[Diem(**d) for d in k["diem"]],
-            )
-            for k in article["khoan"]
-        ]
-        dieu_obj = Dieu(
-            id=article["id"],
-            suffix=article["suffix"],
-            title=article["title"],
-            phan=article["phan"],
-            phan_title=article["phan_title"],
-            chuong=article["chuong"],
-            chuong_title=article["chuong_title"],
-            muc=article.get("muc"),
-            muc_title=article.get("muc_title"),
-            khoan=khoan_objs,
-            preamble=article.get("preamble", ""),
-        )
-        article["judge_dep"] = generate_judge_dep_for_article(
-            client, dieu_obj.full_text()
-        )
+    texts = [_article_text(a) for a in todo]
+    if workers <= 1:
+        results = [generate_judge_dep_for_article(client, t) for t in texts]
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            results = list(pool.map(lambda t: generate_judge_dep_for_article(client, t), texts))
+    for article, questions in zip(todo, results):
+        article["judge_dep"] = questions
     return articles
 
 

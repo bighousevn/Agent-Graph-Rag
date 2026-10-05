@@ -197,3 +197,97 @@ Yếu tố không thỏa mãn: {false_list}
 
 Trả lời:
 """.strip()
+
+
+# ---- Legal Q&A pilot (questions.xlsx) ----------------------------------------
+
+# Port of core/prompt/retrieval RETRIEVE_LAW_PROMPT (the "augment" branch:
+# the LLM names up to three candidate crimes, matched to Crime nodes).
+RETRIEVE_LAW_PROMPT = """
+Bạn là một thẩm phán hình sự chuyên nghiệp, cần phân tích tối đa ba tội danh có thể cấu thành dựa trên tình tiết được mô tả. Hãy tuân theo các yêu cầu sau:
+
+Yêu cầu phân tích:
+1. Phân tích toàn diện từng hành vi trong tình tiết.
+2. Xem xét mọi tội danh mà hành vi có thể vi phạm theo Bộ luật Hình sự Việt Nam.
+3. Bao gồm cả tội danh cơ bản và tội danh đặc thù.
+
+Yêu cầu đầu ra:
+- Chỉ xuất một danh sách dạng Python: ["Tội A", "Tội B", ...]
+- Sắp xếp theo khả năng từ cao xuống thấp.
+- Tối đa ba tội danh; ghi đúng tên tội như trong Bộ luật Hình sự (bắt đầu bằng "Tội").
+- Không giải thích, không đánh số, không thêm nội dung nào khác.
+- Nếu tình tiết không mô tả hành vi phạm tội nào, xuất [].
+
+Tình tiết:
+```
+{fact}
+```
+Bây giờ hãy xuất kết quả:
+""".strip()
+
+# Port of JUDGE_LAW_PROMPT1: applicability of an article that has no
+# judge_dep elements (general part of BLHS, procedural articles).
+JUDGE_LAW_SIMPLE_PROMPT = """
+Bạn là một trợ lý phân tích pháp lý chuyên nghiệp. Hãy đánh giá trực tiếp xem điều luật được cung cấp có liên quan và áp dụng để giải quyết tình huống dưới đây hay không. Điều luật có thể là luật nội dung, luật tố tụng hoặc quy định chung.
+
+Yêu cầu:
+- Đánh giá tình huống có thuộc phạm vi điều chỉnh của điều luật này không.
+- Chỉ xét nghĩa của chính điều luật, không suy diễn ngoài văn bản.
+- Chỉ trả lời "true" hoặc "false".
+
+Điều luật: {law}
+Tình huống: {case}
+
+Trả lời:
+""".strip()
+
+# Replaces judge_crime_all for Q&A: the answer, plus crimes and articles in a
+# structure that can be scored.
+QA_ANSWER_PROMPT = """
+Bạn là luật sư tư vấn pháp luật hình sự Việt Nam. Hãy trả lời câu hỏi dưới đây CHỈ dựa trên các điều luật và tài liệu được cung cấp.
+
+Yêu cầu:
+1. Xác định hành vi trong tình huống cấu thành tội gì (nếu có) và áp dụng điều, khoản, điểm nào; hoặc, với câu hỏi về thủ tục, quy định nào giải quyết vấn đề.
+2. Nêu rõ căn cứ: tên văn bản và điều, khoản, điểm.
+3. Trả lời ngắn gọn, đi thẳng vào câu hỏi, không quá 120 từ, không chép lại nguyên văn điều luật.
+4. Nếu tài liệu được cung cấp không đủ để trả lời, nói rõ là không đủ căn cứ; không bịa điều luật.
+
+Đầu ra là một đối tượng JSON duy nhất, không thêm chữ nào khác:
+{{
+"cau_tra_loi": "câu trả lời ngắn gọn",
+"toi_danh": ["Tội ..."],
+"dieu_luat": [{{"luat": "BLHS" hoặc "BLTTHS" hoặc tên văn bản khác, "dieu": "321", "khoan": "2", "diem": "c"}}]
+}}
+Bỏ trống "khoan"/"diem" ("") nếu không xác định; "toi_danh" là [] nếu câu hỏi không về tội danh.
+
+Câu hỏi:
+{question}
+
+Các điều luật và tài liệu được cung cấp:
+{laws}
+
+Trả lời:
+""".strip()
+
+# LLM-as-judge for the pilot, compared against the reference answer.
+QA_GRADE_PROMPT = """
+Bạn là giảng viên luật hình sự. Hãy chấm câu trả lời của hệ thống so với đáp án tham khảo của luật sư.
+
+Chỉ chấm KẾT LUẬN (trả lời đúng câu hỏi chưa), không chấm cách trình bày:
+- "dung": kết luận chính giống đáp án tham khảo.
+- "mot_phan": đúng một phần (ví dụ thiếu một tội, hoặc đúng tội nhưng sai khoản/điều kiện quan trọng).
+- "sai": kết luận khác đáp án hoặc không trả lời được.
+
+Đầu ra là một đối tượng JSON duy nhất: {{"diem": "dung" | "mot_phan" | "sai", "ly_do": "một câu ngắn"}}
+
+Câu hỏi:
+{question}
+
+Đáp án tham khảo:
+{reference}
+
+Câu trả lời của hệ thống:
+{answer}
+
+Chấm:
+""".strip()

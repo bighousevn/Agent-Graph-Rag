@@ -61,6 +61,12 @@ def main() -> None:
         action="store_true",
         help="Parse structure and report counts only; skip LLM judge_dep calls.",
     )
+    parser.add_argument("--workers", type=int, default=8, help="Parallel LLM calls for judge_dep.")
+    parser.add_argument(
+        "--all-articles",
+        action="store_true",
+        help="Keep every Điều as a Law entry (general part too), not only crime articles.",
+    )
     parser.add_argument(
         "--skip-judge-dep",
         action="store_true",
@@ -97,7 +103,7 @@ def main() -> None:
         print("[2/4] Generating judge_dep (constituent-element questions) via LLM ...")
         config = AppConfig.from_env_file(args.dotenv_path)
         client = LLMClient(config)
-        article_dicts = annotate_articles(article_dicts, client)
+        article_dicts = annotate_articles(article_dicts, client, workers=args.workers)
     with_dep = os.path.join(args.output_dir, "criminal_law_vn_judge_dep.json")
     with open(with_dep, "w", encoding="utf-8") as f:
         json.dump(article_dicts, f, ensure_ascii=False, indent=2)
@@ -112,7 +118,7 @@ def main() -> None:
     print(f"    Written {linked_path}")
 
     print("[4/4] Building law_to_crime_vn.json and crimes_by_part_vn.json ...")
-    law_to_crime = build_law_to_crime(article_dicts)
+    law_to_crime = build_law_to_crime(article_dicts, include_all=args.all_articles)
     crimes_by_part = build_crimes_by_part(article_dicts)
     law_to_crime_path = os.path.join(args.output_dir, "law_to_crime_vn.json")
     crimes_by_part_path = os.path.join(args.output_dir, "crimes_by_part_vn.json")

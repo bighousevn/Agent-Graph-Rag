@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 import time
 from typing import Optional
 
@@ -29,8 +30,13 @@ class LLMClient:
         self.config = config or AppConfig.from_env_file()
         self.llm_config: LLMConfig = self.config.llm
         self._client = None  # lazy: avoid requiring `openai` pkg for dry runs
+        self._lock = threading.Lock()  # generate() may be called from worker threads
 
     def _get_client(self):
+        with self._lock:
+            return self._get_client_unlocked()
+
+    def _get_client_unlocked(self):
         if self._client is None:
             try:
                 from openai import OpenAI

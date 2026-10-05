@@ -79,3 +79,21 @@ def test_openai_request_has_no_extra_body(tmp_path):
     c = client_with(tmp_path, [("ok", "stop")])
     c.generate("p")
     assert "extra_body" not in c._client.calls[0]
+
+
+def test_annotate_articles_parallel_keeps_order(tmp_path):
+    from vn_legal_graph.law.judge_dep import annotate_articles
+
+    def art(i, title):
+        return {"id": i, "suffix": "", "title": title, "phan": "", "phan_title": "", "chuong": "", "chuong_title": "",
+                "khoan": [{"so": 1, "text": f"nội dung {i}", "diem": []}], "preamble": ""}
+
+    arts = [art(1, "Nhiệm vụ"), art(2, "Tội A"), art(3, "Tội B"), art(4, "Tội C")]
+
+    class Fake:
+        def generate(self, prompt, max_tokens=None):
+            n = prompt.split("Điều ")[-1].split(".")[0]
+            return f'["Có {n} không?"]'
+
+    out = annotate_articles(arts, Fake(), workers=3)
+    assert [a["judge_dep"] for a in out] == [[], ["Có 2 không?"], ["Có 3 không?"], ["Có 4 không?"]]

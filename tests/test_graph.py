@@ -134,3 +134,12 @@ def test_edge_to_missing_node_rejected():
     g.add_node("law:1", "Law")
     with pytest.raises(KeyError):
         g.add_edge("law:1", "crime:1", "RELATED_CRIME")
+
+
+def test_general_part_article_has_no_crime_node():
+    laws = LAWS + [{"id": 51, "suffix": "", "title": "Các tình tiết giảm nhẹ trách nhiệm hình sự",
+                    "items": [{"text": "Điều 51. Các tình tiết giảm nhẹ ...", "crime": [], "judge_dep": [], "related_laws": []}]}]
+    g, _ = build_base_graph(laws, [], fake_embed)
+    assert "law:51" in g.graph and "crime:51" not in g.graph
+    assert g.neighbors("law:51", "RELATED_CRIME") == []
+    assert g.node("law:51")["title"] == "Các tình tiết giảm nhẹ trách nhiệm hình sự"

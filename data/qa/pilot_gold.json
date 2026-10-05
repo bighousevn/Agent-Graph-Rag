@@ -1,0 +1,49 @@
+{
+  "_note": "Đáp án chuẩn cho bản thử 5 câu đầu của data/raw/questions.xlsx, rút từ cột 'answer' (luật sư luatvietnam.vn). 'dieu_luat_bat_buoc' = điều phải trích; 'dieu_luat_tuy_chon' = điều đáp án có nhắc nhưng không bắt buộc (điều kiện, hoặc bị loại trừ). Không đưa đáp án vào graph.",
+  "cau_hoi": [
+    {
+      "qa_number": "13105",
+      "loai": "thu_tuc",
+      "dieu_luat_bat_buoc": [{"luat": "BLTTHS", "dieu": "155", "khoan": "3", "diem": ""}],
+      "dieu_luat_tuy_chon": [{"luat": "BLTTHS", "dieu": "155", "khoan": "2", "diem": ""}],
+      "toi_danh": [],
+      "ket_luan": "Bị hại đã rút yêu cầu khởi tố thì không có quyền yêu cầu lại, trừ trường hợp rút yêu cầu do bị ép buộc, cưỡng bức; nếu chứng minh được việc rút đơn là do bị ép buộc thì vẫn được yêu cầu khởi tố lại (khoản 3 Điều 155 BLTTHS)."
+    },
+    {
+      "qa_number": "13038",
+      "loai": "toi_danh_khung",
+      "dieu_luat_bat_buoc": [{"luat": "BLHS", "dieu": "321", "khoan": "2", "diem": "c"}],
+      "dieu_luat_tuy_chon": [],
+      "toi_danh": ["Tội đánh bạc"],
+      "ket_luan": "Đánh bạc qua app trên điện thoại là sử dụng mạng internet, phương tiện điện tử để phạm tội, nên bị truy cứu theo điểm c khoản 2 Điều 321 BLHS dù số tiền dưới 50 triệu đồng."
+    },
+    {
+      "qa_number": "12862",
+      "loai": "toi_danh",
+      "dieu_luat_bat_buoc": [{"luat": "BLHS", "dieu": "134", "khoan": "6", "diem": ""}],
+      "dieu_luat_tuy_chon": [{"luat": "BLHS", "dieu": "304", "khoan": "", "diem": ""}],
+      "toi_danh": ["Tội cố ý gây thương tích hoặc gây tổn hại cho sức khỏe của người khác"],
+      "toi_danh_tuy_chon": ["Tội chế tạo, tàng trữ, vận chuyển, sử dụng, mua bán trái phép hoặc chiếm đoạt vũ khí quân dụng, phương tiện kỹ thuật quân sự"],
+      "ket_luan": "Bị truy cứu về Tội cố ý gây thương tích theo khoản 6 Điều 134 BLHS (chuẩn bị hung khí nguy hiểm, xác định rõ đối tượng); nếu hung khí là vũ khí quân dụng thì còn bị truy cứu theo Điều 304 BLHS."
+    },
+    {
+      "qa_number": "12861",
+      "loai": "toi_danh_khung",
+      "dieu_luat_bat_buoc": [
+        {"luat": "BLHS", "dieu": "174", "khoan": "4", "diem": "a"},
+        {"luat": "BLHS", "dieu": "341", "khoan": "3", "diem": "b"}
+      ],
+      "dieu_luat_tuy_chon": [],
+      "toi_danh": ["Tội lừa đảo chiếm đoạt tài sản", "Tội làm giả con dấu, tài liệu của cơ quan, tổ chức"],
+      "ket_luan": "Bị truy cứu về 02 tội: Tội lừa đảo chiếm đoạt tài sản (điểm a khoản 4 Điều 174 BLHS) và Tội làm giả con dấu, tài liệu của cơ quan, tổ chức với tình tiết sử dụng giấy tờ giả thực hiện tội phạm rất/đặc biệt nghiêm trọng (điểm b khoản 3 Điều 341 BLHS)."
+    },
+    {
+      "qa_number": "12856",
+      "loai": "toi_danh",
+      "dieu_luat_bat_buoc": [{"luat": "BLHS", "dieu": "175", "khoan": "", "diem": ""}],
+      "dieu_luat_tuy_chon": [{"luat": "BLHS", "dieu": "353", "khoan": "6", "diem": ""}],
+      "toi_danh": ["Tội lạm dụng tín nhiệm chiếm đoạt tài sản"],
+      "ket_luan": "Hộ kinh doanh không phải doanh nghiệp nên không áp dụng tội tham ô (khoản 6 Điều 353); hành vi của nhân viên cấu thành Tội lạm dụng tín nhiệm chiếm đoạt tài sản theo Điều 175 BLHS."
+    }
+  ]
+}

@@ -53,7 +53,6 @@ def build_base_graph(
         item = law["items"][0]
         suffix = law.get("suffix", "")
         lid, cid = law_id(law["id"], suffix), crime_id(law["id"], suffix)
-        crime_title = item["crime"][0]
         g.add_node(
             lid,
             "Law",
@@ -64,9 +63,12 @@ def build_base_graph(
             judge_dep=item.get("judge_dep", []),
             related_laws=item.get("related_laws", []),
             insights="",
+            title=law.get("title", ""),
         )
-        g.add_node(cid, "Crime", embedding=embed(crime_title), entry=law["id"], description=crime_title)
-        g.add_edge(lid, cid, "RELATED_CRIME", match_type="exact")
+        if item["crime"]:  # general-part articles (include_all) have no crime
+            crime_title = item["crime"][0]
+            g.add_node(cid, "Crime", embedding=embed(crime_title), entry=law["id"], description=crime_title)
+            g.add_edge(lid, cid, "RELATED_CRIME", match_type="exact")
 
     report = {"bo_qua_dac_trung_loi": [], "bo_qua_khong_co_hanh_vi": [], "thieu_law": []}
     for case in cases:

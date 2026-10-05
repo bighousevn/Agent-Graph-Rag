@@ -1,5 +1,12 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(.venv/bin/python scripts/extract_case_features.py*)",
+      "Bash(.venv/bin/python scripts/summarize_clusters.py*)",
+      "Bash(.venv/bin/python scripts/build_law_layer.py*)",
+      "Bash(.venv/bin/python scripts/judge_retrieval.py*)",
+      "Bash(.venv/bin/python scripts/run_qa_pilot.py*)"
+    ],
     "deny": [
       "Read(./.env)",
       "Read(./.env.*)",

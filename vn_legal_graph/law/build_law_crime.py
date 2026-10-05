@@ -39,19 +39,27 @@ def render_article_full_text(article: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def build_law_to_crime(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def build_law_to_crime(articles: List[Dict[str, Any]], include_all: bool = False) -> List[Dict[str, Any]]:
+    """One entry per crime Điều. With ``include_all`` every Điều is kept
+    (general part such as Điều 51/52 included) and non-crime articles get
+    ``crime: []``; the original keeps crime articles only, but legal Q&A
+    answers cite the general part often (Điều 51/52 in 62 of 231 questions)."""
     result = []
     for a in articles:
-        if not a.get("title", "").strip().startswith("Tội"):
+        is_crime = a.get("title", "").strip().startswith("Tội")
+        if not is_crime and not include_all:
             continue
         result.append(
             {
                 "id": a["id"],
                 "suffix": a.get("suffix", ""),
+                "title": a.get("title", ""),
+                "chuong": a.get("chuong", ""),
+                "phan": a.get("phan", ""),
                 "items": [
                     {
                         "text": render_article_full_text(a),
-                        "crime": [a["title"]],
+                        "crime": [a["title"]] if is_crime else [],
                         "judge_dep": a.get("judge_dep", []),
                         "related_laws": a.get("related_laws", []),
                     }

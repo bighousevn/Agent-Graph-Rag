@@ -141,3 +141,17 @@ def test_consolidated_text_footnotes():
     assert d173.khoan[0].diem[0].ky_hieu == "a"
     # footnote bodies are not appended to the last article
     assert "Luật số 12/2017" not in arts[1].full_text()
+
+
+def test_build_law_to_crime_include_all():
+    from vn_legal_graph.law.build_law_crime import build_law_to_crime
+
+    with open(FIXTURE_PATH, "r", encoding="utf-8") as f:
+        articles = parse_paragraphs([normalize_text(p) for p in json.load(f)])
+    dicts = [dict(a.__dict__, khoan=[k.__dict__ | {"diem": [d.__dict__ for d in k.diem]} for k in a.khoan]) for a in articles]
+    crime_only = build_law_to_crime(dicts)
+    everything = build_law_to_crime(dicts, include_all=True)
+    assert {e["id"] for e in crime_only} == {168, 169, 170, 247}
+    assert {e["id"] for e in everything} == {1, 2, 122, 168, 169, 170, 247, 426}
+    general = next(e for e in everything if e["id"] == 1)
+    assert general["items"][0]["crime"] == [] and general["title"] == "Nhiệm vụ của Bộ luật hình sự"
