@@ -155,3 +155,21 @@ def test_build_law_to_crime_include_all():
     assert {e["id"] for e in everything} == {1, 2, 122, 168, 169, 170, 247, 426}
     general = next(e for e in everything if e["id"] == 1)
     assert general["items"][0]["crime"] == [] and general["title"] == "Nhiệm vụ của Bộ luật hình sự"
+
+
+def test_docx_with_backslash_member_names(tmp_path):
+    import zipfile
+
+    docx = pytest.importorskip("docx")
+    from vn_legal_graph.law.parse_blhs import load_paragraphs_from_docx
+
+    good = tmp_path / "good.docx"
+    d = docx.Document()
+    d.add_paragraph("Điều 1. Nhiệm vụ của Bộ luật hình sự")
+    d.save(good)
+    bad = tmp_path / "bad.docx"
+    with zipfile.ZipFile(good) as zin, zipfile.ZipFile(bad, "w") as zout:
+        for info in zin.infolist():
+            name = info.filename if info.filename.startswith("[Content_Types]") or info.filename.startswith("_rels") else info.filename.replace("/", "\\")
+            zout.writestr(name, zin.read(info.filename))
+    assert "Điều 1. Nhiệm vụ của Bộ luật hình sự" in load_paragraphs_from_docx(str(bad))

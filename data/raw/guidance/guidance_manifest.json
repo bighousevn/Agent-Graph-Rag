@@ -1,129 +1,26 @@
 {
-  "_note": "Danh sách ĐỀ XUẤT các văn bản hướng dẫn thi hành liên quan tới Chương XVI (Điều 168-180, xâm phạm sở hữu) và Chương XX (Điều 247-259, ma túy) của BLHS. Trạng thái 'can_xac_minh' nghĩa là CHƯA được kiểm tra hiệu lực trên vbpl.vn và CHƯA có nội dung text đính kèm. Cần duyệt và bổ sung file text tương ứng vào thư mục này trước khi vn_legal_graph/law/link_guidance.py có thể sử dụng (qua guidance_links.json).",
+  "_note": "Văn bản hướng dẫn đang dùng: 3 Công văn giải đáp vướng mắc của TANDTC (người dùng tải ngày 2026-10-05), tách thành từng mục và gắn vào điều luật bằng vn_legal_graph/law/guidance_congvan.py -> guidance_links.json. Hai Thông tư liên tịch 17/2007 và 08/2015 (hướng dẫn BLHS 1999) đã bị xoá theo yêu cầu người dùng ngày 2026-10-05.",
   "items": [
     {
-      "so_hieu": "17/2007/TTLT-BCA-VKSNDTC-TANDTC-BTP",
-      "ten": "Thông tư liên tịch hướng dẫn áp dụng một số quy định tại Chương XVIII \"Các tội phạm về ma túy\" của BLHS 1999 (sửa đổi bởi TTLT 08/2015)",
-      "loai": "thong_tu_lien_tich",
-      "ap_dung_cho": "chuong_XX",
-      "dieu_lien_quan": [
-        249,
-        250,
-        251,
-        252
-      ],
-      "hieu_luc_tu": "2008-02-01",
-      "con_hieu_luc": false,
-      "ghi_chu": "Hướng dẫn cho BLHS 1999 (đã hết hiệu lực). Chưa có văn bản hướng dẫn thay thế cho BLHS 2015 (Tạp chí Kiểm sát; dự thảo NQ HĐTP về ma túy chưa ban hành, tra cứu 2026-10-04). Người dùng đồng ý dùng làm tài liệu THAM KHẢO cho định nghĩa tàng trữ / mua bán, gắn nhãn rõ trong related_laws. Đã trích nguyên văn phần II mục 3.1, 3.2, 3.3, 3.4, 3.7 điểm c và d vào guidance_links.json (vn_legal_graph/law/guidance_ttlt.py). TTLT 08/2015 không sửa các mục này; nó bãi bỏ điểm đ mục 3.7, điểm này không được dùng.",
-      "file": "data/raw/guidance/17_2007_TTLT-BCA-VKSNDTC-TANDTC-BTP_m_61683.docx",
-      "trang_thai": "da_dung_tham_khao",
-      "file_sua_doi": "data/raw/guidance/08_2015_TTLT-BCA-VKSNDTC-TANDTC-BTP_m_295981.docx"
+      "so_hieu": "163/TANDTC-PC",
+      "ngay": "10/09/2024",
+      "loai": "cong_van_tandtc",
+      "file": "data/raw/guidance/163_TANDTC-PC_625374.docx",
+      "trang_thai": "dang_dung"
     },
     {
-      "so_hieu": "41/2017/QH14",
-      "ten": "Nghị quyết về việc thi hành Bộ luật Hình sự số 100/2015/QH13 đã được sửa đổi, bổ sung một số điều theo Luật số 12/2017/QH14",
-      "loai": "nghi_quyet_quoc_hoi",
-      "ap_dung_cho": "toan_bo",
-      "hieu_luc_tu": null,
-      "con_hieu_luc": null,
-      "file": null,
-      "trang_thai": "can_xac_minh"
+      "so_hieu": "250/TANDTC-PC",
+      "ngay": "28/04/2026",
+      "loai": "cong_van_tandtc",
+      "file": "data/raw/guidance/250_TANDTC-PC_704490.docx",
+      "trang_thai": "dang_dung"
     },
     {
-      "so_hieu": "02/2018/NQ-HĐTP",
-      "ten": "Nghị quyết hướng dẫn áp dụng Điều 65 của Bộ luật Hình sự về án treo",
-      "loai": "nghi_quyet_hdtp",
-      "ap_dung_cho": "dung_chung",
-      "hieu_luc_tu": null,
-      "con_hieu_luc": null,
-      "file": null,
-      "trang_thai": "can_xac_minh"
-    },
-    {
-      "so_hieu": "01/2022/NQ-HĐTP",
-      "ten": "Nghị quyết sửa đổi, bổ sung Nghị quyết 02/2018/NQ-HĐTP về án treo",
-      "loai": "nghi_quyet_hdtp",
-      "ap_dung_cho": "dung_chung",
-      "hieu_luc_tu": null,
-      "con_hieu_luc": null,
-      "file": null,
-      "trang_thai": "can_xac_minh"
-    },
-    {
-      "so_hieu": "57/2022/NĐ-CP",
-      "ten": "Nghị định quy định các danh mục chất ma túy và tiền chất",
-      "loai": "nghi_dinh",
-      "ap_dung_cho": "chuong_XX",
-      "dieu_lien_quan": [
-        247,
-        248,
-        249,
-        250,
-        251,
-        252,
-        253,
-        254,
-        255,
-        256,
-        257,
-        258,
-        259
-      ],
-      "hieu_luc_tu": null,
-      "con_hieu_luc": null,
-      "file": null,
-      "trang_thai": "can_xac_minh"
-    },
-    {
-      "so_hieu": "19/2018/NĐ-CP",
-      "ten": "Nghị định quy định về việc giám định tư pháp đối với hàm lượng chất ma túy",
-      "loai": "nghi_dinh",
-      "ap_dung_cho": "chuong_XX",
-      "dieu_lien_quan": [
-        251,
-        252,
-        253,
-        254
-      ],
-      "hieu_luc_tu": null,
-      "con_hieu_luc": null,
-      "file": null,
-      "trang_thai": "can_xac_minh"
-    },
-    {
-      "so_hieu": "03/2017/NQ-HĐTP",
-      "ten": "Nghị quyết hướng dẫn áp dụng một số quy định của BLHS về các tội xâm phạm sở hữu (nếu còn hiệu lực — cần kiểm tra, có thể đã được thay thế)",
-      "loai": "nghi_quyet_hdtp",
-      "ap_dung_cho": "chuong_XVI",
-      "dieu_lien_quan": [
-        168,
-        169,
-        170,
-        171,
-        172,
-        173,
-        174,
-        175,
-        176,
-        177,
-        178,
-        179,
-        180
-      ],
-      "hieu_luc_tu": null,
-      "con_hieu_luc": null,
-      "file": null,
-      "trang_thai": "can_xac_minh"
-    },
-    {
-      "so_hieu": "khac",
-      "ten": "Án lệ hình sự liên quan Điều 168-180 và Điều 247-259 (danh sách cụ thể cần lọc từ anle.toaan.gov.vn)",
-      "loai": "an_le",
-      "ap_dung_cho": "chuong_XVI_va_XX",
-      "hieu_luc_tu": null,
-      "con_hieu_luc": null,
-      "file": null,
-      "trang_thai": "can_xac_minh"
+      "so_hieu": "01/TANDTC-PC",
+      "ngay": "05/01/2026",
+      "loai": "cong_van_tandtc",
+      "file": "data/raw/guidance/01_TANDTC-PC_688214.docx",
+      "trang_thai": "dang_dung"
     }
   ]
 }

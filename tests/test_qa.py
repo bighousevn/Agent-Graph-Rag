@@ -92,7 +92,7 @@ def test_answer_question_end_to_end_with_fake_llm():
         if "Đánh giá tình huống" in prompt:
             return "false"
         if "luật sư tư vấn" in prompt:
-            assert "[BLHS Điều 321]" in prompt and "Điều 51" not in prompt
+            assert "[BLHS Điều 321] (kiểm tra yếu tố cấu thành, chỉ tham khảo: thỏa mãn)" in prompt
             return json.dumps({"cau_tra_loi": "Khoản 2 Điều 321.", "toi_danh": ["Tội đánh bạc"],
                                "dieu_luat": [{"luat": "BLHS", "dieu": "321", "khoan": "2", "diem": "c"}]}, ensure_ascii=False)
         raise AssertionError(prompt[:80])
@@ -102,6 +102,25 @@ def test_answer_question_end_to_end_with_fake_llm():
     assert out["judge"]["BLHS Điều 321"]["cach"] == "judge_law"
     assert out["judge"]["BLHS Điều 321"]["ap_dung"] is True
     assert out["judge"].get("BLHS Điều 51", {"cach": "don_gian"})["cach"] == "don_gian"
-    assert out["dieu_dung_de_tra_loi"] == ["BLHS Điều 321"]
+    assert out["dieu_dung_de_tra_loi"][0] == "BLHS Điều 321"  # accepted first, others after
     assert out["tra_loi"]["dieu_luat"][0]["dieu"] == "321"
     assert not out["tra_loi_loi"]
+
+
+def test_hard_filter_option_keeps_original_behaviour():
+    g, _ = build_base_graph(LAWS, [], fake_embed)
+
+    def fake(prompt, max_tokens=None):
+        if "Nhân thân bị cáo" in prompt and "Diễn biến vụ án" in prompt:
+            return '{"criminal_acts": ["đánh bạc"]}'
+        if "tối đa ba tội danh" in prompt:
+            return '["Tội đánh bạc"]'
+        if "Các yếu tố cần xét" in prompt:
+            return '{"1": true}'
+        if "Yếu tố thỏa mãn" in prompt or "Đánh giá tình huống" in prompt:
+            return "true" if "Điều 321" in prompt else "false"
+        assert "Điều 51." not in prompt
+        return '{"cau_tra_loi": "ok"}'
+
+    out = answer_question(g, "Đánh bạc qua app?", fake, fake_embed, {"loc_theo_judge": True})
+    assert out["dieu_dung_de_tra_loi"] == ["BLHS Điều 321"]

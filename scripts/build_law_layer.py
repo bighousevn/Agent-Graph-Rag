@@ -92,7 +92,10 @@ def main() -> None:
     n_crime = sum(1 for a in article_dicts if a["title"].strip().startswith("Tội"))
     print(f"    {len(article_dicts)} Điều parsed, {n_crime} are crime ('Tội ...') articles.")
 
-    parsed_path = os.path.join(args.output_dir, "criminal_law_vn.json")
+    parsed_path = os.path.join(
+        args.output_dir,
+        "criminal_law_vn.json" if args.bo_luat == "BLHS" else f"criminal_law_{args.bo_luat.lower()}_vn.json",
+    )
     with open(parsed_path, "w", encoding="utf-8") as f:
         json.dump(article_dicts, f, ensure_ascii=False, indent=2)
     print(f"    Written {parsed_path}")
@@ -104,7 +107,7 @@ def main() -> None:
     if args.bo_luat != "BLHS":
         for a in article_dicts:
             a["judge_dep"] = []
-        article_dicts = link_articles(article_dicts, [])
+        article_dicts = link_articles(article_dicts, load_guidance_links(args.guidance_links), bo_luat=args.bo_luat)
         out = os.path.join(args.output_dir, f"law_{args.bo_luat.lower()}_vn.json")
         with open(out, "w", encoding="utf-8") as f:
             json.dump(build_law_to_crime(article_dicts, include_all=True, bo_luat=args.bo_luat), f, ensure_ascii=False, indent=2)

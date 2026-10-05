@@ -275,8 +275,27 @@ def load_paragraphs_from_docx(path: str) -> List[str]:
             "python-docx is required to parse .docx files. Install it with "
             "`pip install python-docx`."
         )
-    document = docx.Document(path)
+    document = docx.Document(_docx_source(path))
     return [normalize_text(p.text) for p in document.paragraphs]
+
+
+def _docx_source(path: str):
+    """Path, or an in-memory copy with "/" member names when the archive
+    uses Windows "\\" separators (the 2026 consolidated BLHS ships as
+    "docProps\\app.xml", which python-docx cannot resolve)."""
+    import io
+    import zipfile
+
+    with zipfile.ZipFile(path) as z:
+        names = z.namelist()
+        if not any("\\" in n for n in names):
+            return path
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as out:
+            for info in z.infolist():
+                out.writestr(info.filename.replace("\\", "/"), z.read(info.filename))
+    buf.seek(0)
+    return buf
 
 
 def parse_docx(path: str) -> List[Dieu]:

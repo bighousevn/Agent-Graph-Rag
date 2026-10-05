@@ -37,6 +37,8 @@ def main() -> None:
     parser.add_argument("--judge-mode", default=DEFAULTS["judge_mode"], choices=["gop", "trung-thanh"])
     parser.add_argument("--max-candidates", type=int, default=DEFAULTS["max_candidates"])
     parser.add_argument("--dotenv-path", default=".env")
+    parser.add_argument("--tag", default="", help="Suffix for the output file, e.g. lan2.")
+    parser.add_argument("--loc-theo-judge", action="store_true", help="Original hard filter: answer only from accepted articles.")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -65,7 +67,8 @@ def main() -> None:
     print(f"LLM: {client.llm_config.provider} / {client.llm_config.model}")
     cfg = EmbeddingConfig()
     embedder = CachedEmbedder(embedder_from_config(cfg), cfg.model_name)
-    run_cfg = {"judge_mode": args.judge_mode, "max_candidates": args.max_candidates}
+    run_cfg = {"judge_mode": args.judge_mode, "max_candidates": args.max_candidates,
+               "loc_theo_judge": args.loc_theo_judge}
 
     results = []
     for i, q in enumerate(questions, 1):
@@ -89,7 +92,7 @@ def main() -> None:
               f"tội R={s['toi_danh_recall']:.2f} P={s['toi_danh_precision']:.2f} | kết luận={grade and grade['diem']} | {s['so_tu']} từ")
 
     model_slug = re.sub(r"[^\w.-]", "_", client.llm_config.model)
-    out = f"outputs/qa_pilot_{model_slug}.json"
+    out = f"outputs/qa_pilot_{model_slug}{'_' + args.tag if args.tag else ''}.json"
     with open(out, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
 

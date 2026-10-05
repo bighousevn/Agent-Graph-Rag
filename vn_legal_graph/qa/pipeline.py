@@ -39,7 +39,11 @@ DEFAULTS = {
     "max_candidates": 8,
     "judge_mode": "gop",
     "law_text_chars": 4000,
-    "guidance_chars": 2500,
+    "guidance_chars": 4000,
+    # True = the original: answer only from articles judge_law accepted.
+    # False (default for Q&A) = every candidate, with the judge verdict shown
+    # as a hint; run 1 lost the right article for hypothetical questions.
+    "loc_theo_judge": False,
 }
 
 
@@ -119,12 +123,18 @@ def judge_candidate(g: HierarGraph, law_node: str, question: str, generate: Gene
     return {"cach": "don_gian", "ap_dung": parse_bool(answer) is True}
 
 
-def render_laws_for_answer(g: HierarGraph, law_nodes: List[str], cfg: Dict) -> str:
+def render_laws_for_answer(
+    g: HierarGraph, law_nodes: List[str], cfg: Dict, judgments: Optional[Dict[str, Dict]] = None
+) -> str:
     parts = []
     for n in law_nodes:
         d = g.node(n)
         text = d["description"][: cfg["law_text_chars"]]
-        block = f"[{law_label(g, n)}]\n{text}"
+        block = f"[{law_label(g, n)}]"
+        if judgments and n in judgments:
+            verdict = "thỏa mãn" if judgments[n]["ap_dung"] else "không thỏa mãn"
+            block += f" (kiểm tra yếu tố cấu thành, chỉ tham khảo: {verdict})"
+        block += f"\n{text}"
         guidance = render_related([r for r in d.get("related_laws") or [] if isinstance(r, dict) and r.get("loai") == "van_ban_huong_dan"])
         if guidance:
             block += f"\nHướng dẫn áp dụng: {guidance[: cfg['guidance_chars']]}"
@@ -160,10 +170,13 @@ def answer_question(
     judgments = {n: judge_candidate(g, n, question, generate, cfg["judge_mode"]) for n in retrieval["ung_vien"]}
     accepted = [n for n in retrieval["ung_vien"] if judgments[n]["ap_dung"]]
     fallback = not accepted
-    used = accepted or retrieval["ung_vien"][:3]
+    if cfg["loc_theo_judge"]:
+        used = accepted or retrieval["ung_vien"][:3]
+    else:
+        used = accepted + [n for n in retrieval["ung_vien"] if n not in accepted]
 
     raw = generate(
-        QA_ANSWER_PROMPT.format(question=question, laws=render_laws_for_answer(g, used, cfg)),
+        QA_ANSWER_PROMPT.format(question=question, laws=render_laws_for_answer(g, used, cfg, judgments)),
         max_tokens=1024,
     )
     answer = parse_answer(raw)

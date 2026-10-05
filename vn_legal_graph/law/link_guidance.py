@@ -95,15 +95,27 @@ def load_guidance_links(path: str) -> List[Dict[str, Any]]:
         return json.load(f)
 
 
+def _refers_to(ref: Any, entry_int: int, entry_label: str, bo_luat: str) -> bool:
+    """A guidance ref is an int or "249" (BLHS), or "CODE:label" such as
+    "BLTTHS:155" (BLTTHS Điều 155 is not BLHS Điều 155)."""
+    if isinstance(ref, int):
+        return bo_luat == "BLHS" and ref == entry_int
+    ref = str(ref)
+    if ":" in ref:
+        code, label = ref.split(":", 1)
+        return code.upper() == bo_luat and label.lower() == entry_label.lower()
+    return bo_luat == "BLHS" and ref.lower() == entry_label.lower()
+
+
 def attach_guidance_links(
-    article: Dict[str, Any], guidance_links: List[Dict[str, Any]]
+    article: Dict[str, Any], guidance_links: List[Dict[str, Any]], bo_luat: str = "BLHS"
 ) -> List[Dict[str, str]]:
     entry_label = f"{article['id']}{article.get('suffix', '')}"
     entry_int = article["id"]
     related = []
     for item in guidance_links:
         laws = item.get("laws", [])
-        if entry_int not in laws and entry_label not in laws:
+        if not any(_refers_to(r, entry_int, entry_label, bo_luat) for r in laws):
             continue
         related.append(
             {
@@ -116,12 +128,12 @@ def attach_guidance_links(
 
 
 def link_articles(
-    articles: List[Dict[str, Any]], guidance_links: List[Dict[str, Any]]
+    articles: List[Dict[str, Any]], guidance_links: List[Dict[str, Any]], bo_luat: str = "BLHS"
 ) -> List[Dict[str, Any]]:
     article_index = build_article_text_index(articles)
     for article in articles:
         cross_refs = extract_cross_references(article, article_index)
-        guidance = attach_guidance_links(article, guidance_links)
+        guidance = attach_guidance_links(article, guidance_links, bo_luat)
         article["related_laws"] = cross_refs + guidance
     return articles
 
