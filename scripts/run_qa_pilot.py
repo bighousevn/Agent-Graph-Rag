@@ -49,6 +49,7 @@ def main() -> None:
     parser.add_argument("--dotenv-path", default=".env")
     parser.add_argument("--tag", default="", help="Suffix for the output file, e.g. lan2.")
     parser.add_argument("--loc-theo-judge", action="store_true", help="Original hard filter: answer only from accepted articles.")
+    parser.add_argument("--rerank", action="store_true", help="Original LLM rerank of clusters and cases (2 more calls per question).")
     parser.add_argument("--auto-gold", action="store_true", help="Reference articles from the lawyer's answer.")
     parser.add_argument("--guidance-links", default="data/raw/guidance/guidance_links.json")
     parser.add_argument("--cong-van-tay", default="data/qa/cong_van_tay.json")
@@ -73,7 +74,7 @@ def main() -> None:
     if missing:
         raise SystemExit(f"Thiếu đáp án chuẩn cho: {missing}")
     if args.dry_run:
-        per_q = 1 + 1 + 2 * args.max_candidates + 1 + 1
+        per_q = 1 + 1 + 2 * args.max_candidates + 1 + 1 + (2 if args.rerank else 0)
         print(f"{len(questions)} câu × tối đa {per_q} lần gọi LLM "
               f"(đặc trưng, đoán tội, judge ≤{args.max_candidates} điều × 2, trả lời, chấm) "
               f"= tối đa {len(questions) * per_q} lần gọi, ước ~{len(questions) * 60_000:,} token đầu vào")
@@ -89,7 +90,7 @@ def main() -> None:
     cfg = EmbeddingConfig()
     embedder = CachedEmbedder(embedder_from_config(cfg), cfg.model_name)
     run_cfg = {"judge_mode": args.judge_mode, "max_candidates": args.max_candidates,
-               "loc_theo_judge": args.loc_theo_judge}
+               "loc_theo_judge": args.loc_theo_judge, "rerank": args.rerank}
 
     results = []
     for i, q in enumerate(questions, 1):

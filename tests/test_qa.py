@@ -140,3 +140,44 @@ def test_guidance_route_and_pick_closest_unit():
     assert text.startswith("NQ 04/2025, Điều 2 khoản 8") and "khoản 1" not in text
     # without a query vector: document order, still within budget
     assert len(pick_guidance([g51b, g51], None, None, budget=120)) <= 120
+
+
+def test_parse_rank_and_apply_rank():
+    from vn_legal_graph.qa.pipeline import _apply_rank, parse_rank
+
+    assert parse_rank("rank: [3, 1,2]") == [3, 1, 2]
+    assert parse_rank("không rõ") == []
+    assert _apply_rank(["a", "b", "c"], [3, 9, 1], keep=2) == ["c", "a"]  # 9 ignored
+    assert _apply_rank(["a", "b", "c"], [], keep=2) == ["a", "b"]  # unreadable -> cosine order
+
+
+class _StubGraph:
+    """Two clusters; the LLM prefers the second by cosine."""
+
+    def search(self, q, node_type, top_k=5, among=None):
+        if node_type == "Cluster":
+            return [("cl:ma_tuy", 0.9), ("cl:giet_nguoi", 0.8)][:top_k]
+        pool = list(among) if among is not None else ["case:1", "case:2"]
+        return [(c, 0.5) for c in pool][:top_k]
+
+    def predecessors(self, node, rel):
+        return {"cl:ma_tuy": ["case:1"], "cl:giet_nguoi": ["case:9"]}[node]
+
+    def node(self, n):
+        return {"description": n}
+
+
+def test_reranked_cases_follow_llm_order():
+    from vn_legal_graph.qa.pipeline import DEFAULTS, reranked_cases
+
+    def fake(prompt, max_tokens=None):
+        if "nhóm tội phạm" in prompt:
+            assert "1. cl:ma_tuy" in prompt and "2. cl:giet_nguoi" in prompt
+            return "rank: [2, 1]"
+        assert "code1: case:9" in prompt  # cases of the kept cluster first, then direct ones
+        return "[2, 1]"
+
+    out = reranked_cases(_StubGraph(), np.ones(3), "dùng dao đâm chết người", fake, {**DEFAULTS, "n_clusters": 1})
+    assert out["cum"] == ["cl:giet_nguoi"]
+    assert out["an_ung_vien"] == ["case:9", "case:1", "case:2"]
+    assert out["an"] == ["case:1", "case:9", "case:2"]

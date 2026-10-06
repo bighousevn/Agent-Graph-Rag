@@ -32,7 +32,13 @@ import numpy as np
 from ..cases.features import build_prompt, concat_feature_description, parse_features, sanitize_features
 from ..graph.graph_db import HierarGraph
 from ..judge.judge_law import judge_law, parse_bool
-from ..prompts.vi import JUDGE_LAW_SIMPLE_PROMPT, QA_ANSWER_PROMPT, RETRIEVE_LAW_PROMPT
+from ..prompts.vi import (
+    JUDGE_LAW_SIMPLE_PROMPT,
+    QA_ANSWER_PROMPT,
+    RERANK_CASES_PROMPT,
+    RERANK_CLUSTERS_PROMPT,
+    RETRIEVE_LAW_PROMPT,
+)
 from ..retrieval.search import cluster_cases, direct_cases
 
 Generate = Callable[..., str]
@@ -47,6 +53,11 @@ DEFAULTS = {
     "judge_mode": "gop",
     "law_text_chars": 4000,
     "guidance_chars": 4000,
+    # Original two-stage case retrieval: LLM reranks the top-5 clusters (keep
+    # n_clusters), then the merged direct + cluster cases (keep 3).
+    "rerank": False,
+    "rerank_clusters_from": 5,
+    "rerank_cases_keep": 3,
     # True = the original: answer only from articles judge_law accepted.
     # False (default for Q&A) = every candidate, with the judge verdict shown
     # as a hint; run 1 lost the right article for hypothetical questions.
@@ -145,12 +156,57 @@ def laws_of_cases(g: HierarGraph, ranked_cases) -> List[str]:
     return out
 
 
+def parse_rank(text: str) -> List[int]:
+    """[3, 1, 2] or "rank: [3,1,2]" -> [3, 1, 2]; [] if unreadable."""
+    first, last = text.find("["), text.rfind("]")
+    if first == -1 or last < first:
+        return []
+    out: List[int] = []
+    for tok in text[first + 1 : last].replace(" ", "").split(","):
+        if tok.isdigit() and int(tok) not in out:
+            out.append(int(tok))
+    return out
+
+
+def _apply_rank(items: List, rank: List[int], keep: int) -> List:
+    """Items in the LLM's order (1-based numbers), unknown numbers ignored,
+    unranked items after; first ``keep``."""
+    picked = [items[i - 1] for i in rank if 1 <= i <= len(items)]
+    picked += [x for x in items if x not in picked]
+    return picked[:keep]
+
+
+def reranked_cases(g: HierarGraph, query_vec, query_text: str, generate: Generate, cfg: Dict) -> Dict:
+    """The original top_retrieve + direct_retrieve + rerank."""
+    clusters = [c for c, _ in g.search(query_vec, "Cluster", top_k=cfg["rerank_clusters_from"])]
+    listing = "\n".join(f"{i}. {g.node(c).get('description', '')}" for i, c in enumerate(clusters, 1))
+    rank = parse_rank(generate(RERANK_CLUSTERS_PROMPT.format(cluster_summaries=listing, query_text=query_text), max_tokens=64))
+    kept_clusters = _apply_rank(clusters, rank, cfg["n_clusters"])
+    pool: List[str] = []
+    for c in kept_clusters:
+        for case, _ in g.search(query_vec, "Case", top_k=cfg["top_k_cases"], among=g.predecessors(c, "BELONGS_TO")):
+            if case not in pool:
+                pool.append(case)
+    for case, _ in direct_cases(g, query_vec, cfg["top_k_cases"]):
+        if case not in pool:
+            pool.append(case)
+    listing = "\n".join(f"code{i}: {g.node(c).get('description', '')[:800]}" for i, c in enumerate(pool, 1))
+    rank = parse_rank(generate(RERANK_CASES_PROMPT.format(neighbor_summaries=listing, query_text=query_text), max_tokens=64))
+    kept = _apply_rank(pool, rank, cfg["rerank_cases_keep"])
+    return {"cum": kept_clusters, "an_ung_vien": pool, "an": kept}
+
+
 def retrieve_candidates(
-    g: HierarGraph, question: str, query_vec, generate: Generate, embed: Embed, cfg: Dict
+    g: HierarGraph, question: str, query_vec, generate: Generate, embed: Embed, cfg: Dict, query_text: str = ""
 ) -> Dict:
     routes: Dict[str, List[str]] = {}
-    routes["truc_tiep"] = laws_of_cases(g, direct_cases(g, query_vec, cfg["top_k_cases"]))
-    routes["qua_cum"] = laws_of_cases(g, cluster_cases(g, query_vec, cfg["n_clusters"], cfg["top_k_cases"]))
+    rerank = None
+    if cfg["rerank"]:
+        rerank = reranked_cases(g, query_vec, query_text or question, generate, cfg)
+        routes["an_tuong_tu"] = laws_of_cases(g, [(c, 0.0) for c in rerank["an"]])
+    else:
+        routes["truc_tiep"] = laws_of_cases(g, direct_cases(g, query_vec, cfg["top_k_cases"]))
+        routes["qua_cum"] = laws_of_cases(g, cluster_cases(g, query_vec, cfg["n_clusters"], cfg["top_k_cases"]))
 
     crimes = parse_crime_list(generate(RETRIEVE_LAW_PROMPT.format(fact=question), max_tokens=256))
     augment: List[str] = []
@@ -169,14 +225,15 @@ def retrieve_candidates(
     routes["van_ban_luat"] = [n for n, _ in g.search(question_vec, "Law", top_k=cfg["top_k_laws_text"])]
     routes["huong_dan"] = guidance_laws(g, question_vec, embed, cfg["top_k_guidance"])
 
-    order = ["llm_doan_toi", "huong_dan", "van_ban_luat", "truc_tiep", "qua_cum"]
+    order = ["llm_doan_toi", "huong_dan", "van_ban_luat", "an_tuong_tu", "truc_tiep", "qua_cum"]
     candidates: List[str] = []
     for r in order:
-        for law in routes[r]:
+        for law in routes.get(r, []):
             if law not in candidates:
                 candidates.append(law)
     return {
         "tuyen": routes,
+        "rerank": rerank,
         "llm_toi_danh": crime_hits,
         "ung_vien": candidates[: cfg["max_candidates"]],
     }
@@ -241,7 +298,7 @@ def answer_question(
     description = concat_feature_description(features) if features else ""
     query_vec = embed(description or question)
 
-    retrieval = retrieve_candidates(g, question, query_vec, generate, embed, cfg)
+    retrieval = retrieve_candidates(g, question, query_vec, generate, embed, cfg, description)
     judgments = {n: judge_candidate(g, n, question, generate, cfg["judge_mode"]) for n in retrieval["ung_vien"]}
     accepted = [n for n in retrieval["ung_vien"] if judgments[n]["ap_dung"]]
     fallback = not accepted
