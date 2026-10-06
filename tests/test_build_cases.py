@@ -123,3 +123,11 @@ def test_mask_ocr_damaged_crime_name():
     assert "trái phép chất ma túy" not in out
     # unrelated phrases after "tội" stay
     assert mask_leaks("bắt người phạm tội quả tang", NAMES) == "bắt người phạm tội quả tang"
+
+
+def test_split_by_crime_rare_crimes_stay_in_corpus():
+    case_crimes = {i: ["249"] for i in range(30)}
+    case_crimes.update({100 + i: ["123"] for i in range(3)})
+    corpus, test = split_by_crime(case_crimes, test_per_crime=5, corpus_max_per_crime=20, test_min_cases=10)
+    assert all(case_crimes[c] == ["249"] for c in test) and len(test) == 5
+    assert sum(1 for c in corpus if case_crimes[c] == ["123"]) == 3

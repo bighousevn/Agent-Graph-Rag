@@ -16,3 +16,7 @@ data/raw/dataset_drive/
 
 # Neo4j database files (docker-compose.yml)
 data/neo4j/
+
+# anle.toaan.gov.vn (HuggingFace tmquan/anle-toaan-gov-vn), tải lại được:
+# curl -L https://huggingface.co/datasets/tmquan/anle-toaan-gov-vn/resolve/main/documents-00000-of-00001.parquet -o data/raw/anle/documents.parquet
+data/raw/anle/

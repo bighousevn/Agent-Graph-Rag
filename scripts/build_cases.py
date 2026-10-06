@@ -4,6 +4,10 @@ ViCSR. See vn_legal_graph/cases/build_cases.py for the steps.
 
     python scripts/build_cases.py
     python scripts/build_cases.py --articles 249 251 173 247 --test-per-crime 10 --corpus-max-per-crime 100
+    # every crime, ViCSR + anle.toaan.gov.vn, as the paper samples (<=20 corpus/crime);
+    # ViCSR cases labelled 410 are dropped (--drop-articles):
+    python scripts/build_cases.py --all-crimes --anle data/raw/anle/documents.parquet \
+        --corpus-max-per-crime 20 --test-per-crime 5 --test-min-cases 10
 
 No LLM calls.
 """
@@ -46,6 +50,12 @@ def main() -> None:
     parser.add_argument("--test-per-crime", type=int, default=10)
     parser.add_argument("--corpus-max-per-crime", type=int, default=100)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--all-crimes", action="store_true", help="Every BLHS crime, not only --articles.")
+    parser.add_argument("--anle", default="", help="anle.toaan.gov.vn parquet (vn_legal_graph/cases/anle.py) to add.")
+    parser.add_argument("--law-json", default="data/processed/law_to_crime_vn.json")
+    parser.add_argument("--test-min-cases", type=int, default=0, help="Crimes with fewer cases get no test cases.")
+    parser.add_argument("--drop-articles", nargs="*", type=int, default=[410],
+                        help="ViCSR labels known to be wrong: 410 is Điều 244 matched to a truncated title (HANDOFF 8.1).")
     args = parser.parse_args()
 
     scope = set(args.articles)
@@ -71,7 +81,10 @@ def main() -> None:
         if not crimes:
             drop_reason["không gắn được nhãn"] += 1
             continue
-        if not set(crimes) <= scope:
+        if set(crimes) & set(args.drop_articles):
+            drop_reason["nhãn không tin được"] += 1
+            continue
+        if not args.all_crimes and not set(crimes) <= scope:
             drop_reason["có tội ngoài phạm vi" if set(crimes) & scope else "ngoài phạm vi"] += 1
             continue
         facts = extract_facts(result["sections"], summaries.get(case_id), crime_names)
@@ -79,7 +92,7 @@ def main() -> None:
             drop_reason["diễn biến quá ngắn"] += 1
             continue
         dien_bien, source = facts
-        records[case_id] = {
+        records[str(case_id)] = {
             "id": f"vicsr-{case_id}",
             "nguon": f"ViCSR#{case_id}",
             "nam": judgment_year(detail),
@@ -95,14 +108,26 @@ def main() -> None:
         }
 
     print("Loại vì:", dict(drop_reason))
+    if args.anle:
+        import pyarrow.parquet as pq
+
+        from vn_legal_graph.cases.anle import records_from_documents
+
+        with open(args.law_json, encoding="utf-8") as f:
+            law_json = json.load(f)
+        anle = records_from_documents(pq.read_table(args.anle).to_pylist(), law_json)
+        print(f"anle.toaan.gov.vn: {len(anle)} án hình sự có nhãn và diễn biến")
+        records.update(anle)
     eligible = collections.Counter(a for r in records.values() for a in r["dieu"])
-    print("Án đủ điều kiện theo tội:", {a: eligible[a] for a in sorted(scope)})
+    shown = sorted(eligible, key=lambda a: -eligible[a]) if args.all_crimes else sorted(scope)
+    print(f"Án đủ điều kiện theo tội ({len(eligible)} tội):", {a: eligible[a] for a in shown})
 
     corpus_ids, test_ids = split_by_crime(
-        {cid: r["dieu"] for cid, r in records.items()},
+        {cid: [str(a) for a in r["dieu"]] for cid, r in records.items()},
         args.test_per_crime,
         args.corpus_max_per_crime,
         args.seed,
+        args.test_min_cases,
     )
     assert not set(corpus_ids) & set(test_ids)
 
@@ -113,13 +138,14 @@ def main() -> None:
         path = os.path.join(args.output_dir, filename)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(rows, f, ensure_ascii=False, indent=2)
-        per_crime = collections.Counter(a for r in rows for a in r["dieu"])
+        per_crime = collections.Counter(str(a) for r in rows for a in r["dieu"])
         words = sorted(len(r["dien_bien"].split()) for r in rows)
         leaks = sum(1 for r in rows if LEAK_AUDIT_RE.search(r["dien_bien"]))
         digits = sum(1 for r in rows if re.search(r"điều \d", r["dien_bien"]))
         print(
             f"\n{role}: {len(rows)} án -> {path}\n"
-            f"  theo tội: {dict(sorted(per_crime.items()))}\n"
+            f"  theo tội ({len(per_crime)} tội): {dict(per_crime.most_common())}\n"
+            f"  theo nguồn: {dict(collections.Counter(r['id'].split('-')[0] for r in rows))}\n"
             f"  độ dài diễn biến (từ): min {words[0]}, trung vị {words[len(words) // 2]}, max {words[-1]}\n"
             f"  nguồn diễn biến: {dict(collections.Counter(r['dien_bien_nguon'] for r in rows))}\n"
             f"  kiểm tra rò rỉ: còn 'tội <tên>' ở {leaks} án, còn 'điều <số>' ở {digits} án"

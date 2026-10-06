@@ -155,15 +155,18 @@ def extract_dieu_khoan(quyet_dinh: str, articles: Iterable[int]) -> List[str]:
 
 
 def split_by_crime(
-    case_crimes: Dict[int, List[int]],
+    case_crimes: Dict,
     test_per_crime: int,
     corpus_max_per_crime: int,
     seed: int = 42,
-) -> Tuple[List[int], List[int]]:
+    test_min_cases: int = 0,
+) -> Tuple[List, List]:
     """Per-crime sampling, rarest crime first, so a multi-crime case counts
     toward its rarest crime. Each crime gets up to ``test_per_crime`` test
     cases and up to ``corpus_max_per_crime`` corpus cases. A case is used
-    at most once. Returns (corpus_ids, test_ids)."""
+    at most once. A crime with fewer than ``test_min_cases`` cases gets no
+    test cases (they all go to the corpus: a rare crime is better in the
+    graph than as two test cases). Returns (corpus_ids, test_ids)."""
     rng = random.Random(seed)
     by_crime: Dict[int, List[int]] = defaultdict(list)
     for case_id, crimes in sorted(case_crimes.items()):
@@ -176,8 +179,9 @@ def split_by_crime(
     for crime in sorted(by_crime, key=lambda c: (len(by_crime[c]), c)):
         pool = [c for c in by_crime[crime] if c not in used]
         rng.shuffle(pool)
-        t = pool[:test_per_crime]
-        k = pool[test_per_crime : test_per_crime + corpus_max_per_crime]
+        n_test = test_per_crime if len(by_crime[crime]) >= test_min_cases else 0
+        t = pool[:n_test]
+        k = pool[n_test : n_test + corpus_max_per_crime]
         test += t
         corpus += k
         used.update(t)

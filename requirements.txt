@@ -7,6 +7,7 @@ pytest>=8.0.0
 # Phase 3+ (Case layer / graph construction)
 networkx>=3.2
 neo4j>=5.20  # optional: graph storage in Neo4j (docker-compose.yml)
+pyarrow>=15  # reads data/raw/anle/documents.parquet (scripts/build_cases.py --anle)
 numpy>=1.26
 scipy>=1.11
 # torch: on a machine without NVIDIA GPU install the CPU build first:
