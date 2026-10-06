@@ -97,7 +97,10 @@ class HierarGraph:
             pairs = [(i, float(s)) for i, s in zip(ids, scores) if i in allowed]
         else:
             pairs = [(i, float(s)) for i, s in zip(ids, scores)]
-        pairs.sort(key=lambda p: (-p[1], p[0]))
+        # Scores equal to 5 decimals count as ties, broken by id: clusters
+        # with the same summary differ by ~1e-7, which float32 rounding in
+        # another store (Neo4j) can reorder.
+        pairs.sort(key=lambda p: (-round(p[1], 5), p[0]))
         return pairs[:top_k]
 
     def similarity_matrix(self, node_type: str) -> Tuple[List[str], np.ndarray]:

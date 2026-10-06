@@ -798,6 +798,19 @@ khoản/điểm (chỉ tính khi luật sư có ghi khoản của điều đó):
 2. Chạy lặp 2–3 lần để đo nhiễu của LLM.
 3. Giảm nhiễu tuyến `qua_cum` (cụm toàn án ma túy).
 
+### 11.4. Lưu graph trong Neo4j (2026-10-07, người dùng chọn)
+
+- `docker-compose.yml`: `neo4j:5.26-community`, cổng chỉ mở 127.0.0.1 (7474 web, 7687 bolt), dữ liệu ở `data/neo4j/` (gitignore). Mật khẩu `NEO4J_PASSWORD`, mặc định `legalgraph-local`. Lưu ý: docker compose tự đọc `.env` để thay biến; code Python chỉ đọc biến môi trường, không đọc `.env`.
+- `vn_legal_graph/graph/neo4j_store.py`: `export_graph` (pkl → Neo4j) và `Neo4jGraph` có cùng các hàm truy vấn với `HierarGraph` (`node`, `nodes_of`, `neighbors`, `predecessors`, `search`, `stats`). `scripts/export_neo4j.py` chép và tự kiểm tra; `run_qa_pilot.py --backend neo4j`.
+- `build_graph.py` vẫn dựng graph trong bộ nhớ rồi ghi pkl; Neo4j là nơi lưu và truy vấn. Dựng lại graph thì chạy lại `export_neo4j.py`.
+- Các chỗ phải sửa để kết quả giống hệt:
+  - vector index mặc định bật quantization → điểm lệch ~0,002: tắt;
+  - HNSW là tìm gần đúng → sót node top-5 ở 6/160 truy vấn: `search` mặc định tính chính xác bằng Cypher (`vector.similarity.cosine`, điểm Neo4j là (1+cos)/2 nên đổi về cos);
+  - 4 cụm cùng tóm tắt "Các tội phạm về ma túy" có điểm chênh ~1e-7 → làm tròn 5 chữ số rồi phân định bằng id (đổi cả `HierarGraph.search`; 40 câu không đổi kết quả);
+  - thứ tự cạnh và node: lưu `out_seq`, `in_seq` trên cạnh và `ord` trên node.
+- Kiểm chứng: 160 truy vấn ngẫu nhiên top-1/top-5 giống 160/160, cạnh giống; 40 câu hỏi–đáp qua Neo4j giống bản pkl ở cả truy xuất, judge, câu trả lời và điểm chấm (40/40).
+- Test: `tests/test_neo4j_store.py`; bài chạy với Neo4j thật cần `NEO4J_TEST=1` (xoá dữ liệu trong DB, phải chạy lại `export_neo4j.py` sau đó).
+
 ## 10. Tham chiếu
 
 - Sơ đồ tiến độ và kiến trúc truy vấn: <https://claude.ai/artifact/BMLpjNNcp1J9sgwnoyUX11> (artifact riêng của người dùng). Lưu ý: sơ đồ truy vấn trong đó còn thiếu 2 bước đã nêu ở mục 4.2.

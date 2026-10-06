@@ -41,6 +41,8 @@ def main() -> None:
     parser.add_argument("--questions", default="data/raw/questions.xlsx")
     parser.add_argument("--gold", default="data/qa/pilot_gold.json")
     parser.add_argument("--graph", default="outputs/hierargraph.pkl")
+    parser.add_argument("--backend", default="pkl", choices=["pkl", "neo4j"],
+                        help="pkl: load --graph into memory; neo4j: query the database (scripts/export_neo4j.py).")
     parser.add_argument("--n", type=int, default=5)
     parser.add_argument("--judge-mode", default=DEFAULTS["judge_mode"], choices=["gop", "trung-thanh"])
     parser.add_argument("--max-candidates", type=int, default=DEFAULTS["max_candidates"])
@@ -54,7 +56,12 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    g = HierarGraph.load(args.graph)
+    if args.backend == "neo4j":
+        from vn_legal_graph.graph.neo4j_store import Neo4jGraph, connect
+
+        g = Neo4jGraph(connect())
+    else:
+        g = HierarGraph.load(args.graph)
     stats = g.stats()
     print(f"Graph: {stats['nodes']}")
     if args.auto_gold:

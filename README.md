@@ -59,6 +59,28 @@ Kết quả nằm trong `data/processed/`:
 
 Văn bản hướng dẫn thi hành (Nghị quyết, Nghị định, Án lệ) được đề xuất trong `data/raw/guidance/guidance_manifest.json` (trạng thái `can_xac_minh` — cần kiểm tra hiệu lực và bổ sung nội dung trước khi dùng). Khi đã có nội dung, tạo `data/raw/guidance/guidance_links.json` theo schema `[{"explain", "from", "laws": [số điều]}]` để `link_guidance` tự động gắn vào đúng Điều.
 
+## Lưu graph trong Neo4j
+
+`scripts/build_graph.py` dựng graph và ghi `outputs/hierargraph.pkl`. Để lưu và truy vấn trong Neo4j:
+
+```bash
+docker compose up -d neo4j                 # Neo4j 5.26, chỉ mở 127.0.0.1; web: http://localhost:7474
+.venv/bin/python scripts/export_neo4j.py   # chép graph vào Neo4j và kiểm tra kết quả giống bản trong bộ nhớ
+.venv/bin/python scripts/run_qa_pilot.py --backend neo4j ...
+```
+
+- Node: nhãn `:Law`, `:Crime`, `:Case`, `:Cluster` (cùng nhãn `:Node`, ràng buộc `id` duy nhất); thuộc tính lồng nhau (vd `related_laws`) lưu thành chuỗi JSON `<tên>__json`; `embedding` 768 chiều, có vector index cosine cho mỗi nhãn.
+- Cạnh: `RELATED_CRIME`, `RELATES_TO_LAW`, `SIMILAR_TO`, `BELONGS_TO`.
+- Mật khẩu: biến môi trường `NEO4J_PASSWORD` (mặc định `legalgraph-local`, chỉ dùng trên máy). Dữ liệu ở `data/neo4j/` (không commit).
+- Tìm theo embedding mặc định là chính xác (`vector.similarity.cosine` trên mọi node của nhãn); vector index HNSW dùng được với `Neo4jGraph(..., exact=False)` khi dữ liệu lớn.
+
+Ví dụ Cypher trong giao diện web:
+
+```cypher
+MATCH (c:Case)-[:RELATES_TO_LAW]->(l:Law {entry: 321}) RETURN c, l LIMIT 25;
+MATCH (k:Cluster)<-[:BELONGS_TO]-(c:Case) RETURN k.description, count(c);
+```
+
 ## Kiểm tra
 
 ```bash

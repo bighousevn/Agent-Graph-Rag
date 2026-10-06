@@ -13,3 +13,6 @@ venv/
 
 # Dataset tải từ Google Drive (lớn, không commit)
 data/raw/dataset_drive/
+
+# Neo4j database files (docker-compose.yml)
+data/neo4j/
