@@ -124,3 +124,19 @@ def test_hard_filter_option_keeps_original_behaviour():
 
     out = answer_question(g, "Đánh bạc qua app?", fake, fake_embed, {"loc_theo_judge": True})
     assert out["dieu_dung_de_tra_loi"] == ["BLHS Điều 321"]
+
+
+def test_guidance_route_and_pick_closest_unit():
+    from vn_legal_graph.qa.pipeline import guidance_laws, pick_guidance
+
+    g51 = {"loai": "van_ban_huong_dan", "id": "NQ 04/2025, Điều 2 khoản 8", "text": "Phạm tội nhưng chưa gây thiệt hại: trộm cắp xe máy bị bắt"}
+    g51b = {"loai": "van_ban_huong_dan", "id": "NQ 04/2025, Điều 2 khoản 1", "text": "Ngăn chặn tác hại, cây cối " + "x" * 300}
+    laws = [dict(LAWS[0]), {**LAWS[1], "items": [{**LAWS[1]["items"][0], "related_laws": [g51b, g51]}]}]
+    g, _ = build_base_graph(laws, [], fake_embed)
+    q = fake_embed("trộm cắp xe máy rồi bị bắt có phải chưa gây thiệt hại?")
+    assert guidance_laws(g, q, fake_embed, top_k=1) == ["law:51"]
+    # closest unit first, and the far one is dropped when it does not fit
+    text = pick_guidance([g51b, g51], q, fake_embed, budget=120)
+    assert text.startswith("NQ 04/2025, Điều 2 khoản 8") and "khoản 1" not in text
+    # without a query vector: document order, still within budget
+    assert len(pick_guidance([g51b, g51], None, None, budget=120)) <= 120

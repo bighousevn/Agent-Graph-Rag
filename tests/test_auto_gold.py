@@ -54,3 +54,10 @@ def test_khoan_precision():
     assert khoan_precision(right, gold) == 1.0
     assert khoan_precision(wrong, gold) == 0.0
     assert khoan_precision(unknown, gold) is None
+
+
+def test_cited_resolutions_with_consolidated_alias():
+    from vn_legal_graph.qa.auto_gold import cited_resolutions
+
+    answer = "Theo Nghị quyết 02/2018/NQ-HĐTP (sửa bởi 01/2022/NQ-HĐTP) và Nghị quyết 04/2025/NQ-HĐTP; Nghị quyết 01/2006/NQ-HĐTP"
+    assert cited_resolutions(answer, ["02/VBHN-TANDTC", "04/2025/NQ-HĐTP"]) == ["02/VBHN-TANDTC", "04/2025/NQ-HĐTP"]

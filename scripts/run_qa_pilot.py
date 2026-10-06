@@ -50,6 +50,7 @@ def main() -> None:
     parser.add_argument("--auto-gold", action="store_true", help="Reference articles from the lawyer's answer.")
     parser.add_argument("--guidance-links", default="data/raw/guidance/guidance_links.json")
     parser.add_argument("--cong-van-tay", default="data/qa/cong_van_tay.json")
+    parser.add_argument("--ids-from", default="", help="Re-run the questions of an earlier result file, e.g. outputs/qa_pilot_deepseek-flash_tudong40.json.")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -115,6 +116,9 @@ def main() -> None:
     if args.auto_gold:
         for nhom in ("co_cong_van", "khong_cong_van"):
             report([r for r in results if r["dap_an_chuan"]["nhom"] == nhom], nhom, True)
+        report([r for r in results if r["dap_an_chuan"].get("nghi_quyet_trich")], "co_nghi_quyet", True)
+        if args.ids_from:
+            compare(json.load(open(args.ids_from, encoding="utf-8")), results)
     print(f"Đã ghi {out}")
 
 
@@ -133,10 +137,24 @@ def report(results, label, auto) -> None:
           f"kết luận: {dict((x, grades.count(x)) for x in sorted(set(grades)))} | độ dài TB {mean('so_tu'):.0f} từ")
 
 
+def compare(before, after) -> None:
+    """Per-question change of the graded conclusion against an earlier run."""
+    grade = lambda r: r["cham_ket_luan"]["diem"] if r.get("cham_ket_luan") else "khong_doc_duoc"
+    old = {r["qa_number"]: grade(r) for r in before}
+    rank = {"sai": 0, "khong_doc_duoc": 0, "mot_phan": 1, "dung": 2}
+    better = [(r["qa_number"], old[r["qa_number"]], grade(r)) for r in after if rank[grade(r)] > rank[old[r["qa_number"]]]]
+    worse = [(r["qa_number"], old[r["qa_number"]], grade(r)) for r in after if rank[grade(r)] < rank[old[r["qa_number"]]]]
+    print(f"\n=== So với lần trước: {len(better)} câu tốt hơn, {len(worse)} câu kém hơn ===")
+    print(f"tốt hơn: {better}")
+    print(f"kém hơn: {worse}")
+
+
 def auto_gold_questions(g, args):
-    items = json.load(open(args.guidance_links, encoding="utf-8"))
+    links = json.load(open(args.guidance_links, encoding="utf-8"))
+    items = [it for it in links if it["from"].startswith("Công văn")]  # group = Công văn only
     manual = {k: v for k, v in json.load(open(args.cong_van_tay, encoding="utf-8")).items() if not k.startswith("_")}
-    letters = {re.match(r"Công văn (\d+)/", it["from"]).group(1) for it in items if re.match(r"Công văn (\d+)/", it["from"])}
+    letters = {re.match(r"Công văn (\d+)/", it["from"]).group(1) for it in items}
+    resolutions = {m.group(1) for it in links for m in [re.search(r"(\d+/\d{4}/NQ-HĐTP|\d+/VBHN-TANDTC)", it["from"])] if m}
     crimes_of = {}
     for node in g.nodes_of("Law"):
         d = g.node(node)
@@ -144,15 +162,23 @@ def auto_gold_questions(g, args):
         crimes_of[key] = [g.node(c)["description"] for c in g.neighbors(node, "RELATED_CRIME")]
     pool = []
     for q in load_questions(args.questions):
-        gold = build_gold(q, items, letters, crimes_of, manual)
+        gold = build_gold(q, items, letters, crimes_of, manual, resolutions)
         if gold["dieu_luat_bat_buoc"]:
             pool.append((q, gold))
-    chosen = [p for p in pool if p[1]["nhom"] == "co_cong_van"]
-    chosen += [p for p in pool if p[1]["nhom"] == "khong_cong_van"][: max(0, args.n - len(chosen))]
+    if args.ids_from:
+        ids = [r["qa_number"] for r in json.load(open(args.ids_from, encoding="utf-8"))]
+        chosen = [p for p in pool if p[1]["qa_number"] in ids]
+        missing = set(ids) - {p[1]["qa_number"] for p in chosen}
+        if missing:
+            raise SystemExit(f"Không còn trong phạm vi: {sorted(missing)}")
+    else:
+        chosen = [p for p in pool if p[1]["nhom"] == "co_cong_van"]
+        chosen += [p for p in pool if p[1]["nhom"] == "khong_cong_van"][: max(0, args.n - len(chosen))]
     order = {id(q): i for i, (q, _) in enumerate(pool)}
     chosen.sort(key=lambda p: order[id(p[0])])
     print(f"Đáp án tự động: {len(pool)} câu có trích BLHS/BLTTHS; chọn {len(chosen)} "
-          f"({sum(p[1]['nhom'] == 'co_cong_van' for p in chosen)} có Công văn)")
+          f"({sum(p[1]['nhom'] == 'co_cong_van' for p in chosen)} có Công văn, "
+          f"{sum(bool(p[1]['nghi_quyet_trich']) for p in chosen)} trích Nghị quyết HĐTP có trong graph)")
     return [q for q, _ in chosen], {gold["qa_number"]: gold for _, gold in chosen}
 
 

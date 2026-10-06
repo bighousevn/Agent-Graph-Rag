@@ -10,6 +10,8 @@ cites ("Điều 134 của Bộ luật Hình sự", "khoản 3 Điều 155 Bộ l
 hình sự") and to BLHS crimes it names exactly ("Tội lừa đảo chiếm đoạt tài
 sản"). Links are "BLHS:134" / "BLTTHS:155".
 
+Nghị quyết HĐTP in the same folder are added by guidance_nghiquyet.py.
+
     python -m vn_legal_graph.law.guidance_congvan --dir data/raw/guidance \
         --law-json data/processed/law_to_crime_vn.json \
         --output data/raw/guidance/guidance_links.json
@@ -147,6 +149,13 @@ def main() -> None:
     for path in sorted(glob.glob(os.path.join(args.dir, "*TANDTC-PC*.docx"))):
         got = links_from_letter(path, titles)
         print(f"{os.path.basename(path)}: {len(got)} mục hình sự có gắn điều luật")
+        links += got
+    from .guidance_nghiquyet import links_from_resolution
+
+    resolutions = sorted(glob.glob(os.path.join(args.dir, "*NQ-HDTP*.docx")) + glob.glob(os.path.join(args.dir, "*VBHN-TANDTC*.docx")))
+    for path in resolutions:
+        got = links_from_resolution(path)
+        print(f"{os.path.basename(path)}: {len(got)} mục có gắn điều luật")
         links += got
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(links, f, ensure_ascii=False, indent=2)

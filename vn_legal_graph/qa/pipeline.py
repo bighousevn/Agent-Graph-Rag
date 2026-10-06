@@ -9,6 +9,10 @@ pipeline (core/utils/util.py::analyze_case) as far as Q&A allows.
        d. law text: question vs Law node text                  (added: few cases exist for most
                                                                  crimes in the questions, and the
                                                                  general part has no Crime nodes)
+       e. guidance: question vs guidance units (Công văn, Nghị quyết HĐTP items in
+          related_laws) -> the articles they are attached to  (added: "Như thế nào là
+                                                                 lập công chuộc tội?" is answered by a
+                                                                 Nghị quyết item, not by Điều 51's text)
     3. judge every candidate: judge_law with judge_dep when the article has
        it, else one applicability call (original JUDGE_LAW_PROMPT1)
     4. answer from the accepted articles (replaces judge_crime_all, which
@@ -21,11 +25,13 @@ from __future__ import annotations
 
 import ast
 import json
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
+
+import numpy as np
 
 from ..cases.features import build_prompt, concat_feature_description, parse_features, sanitize_features
 from ..graph.graph_db import HierarGraph
-from ..judge.judge_law import judge_law, parse_bool, render_related
+from ..judge.judge_law import judge_law, parse_bool
 from ..prompts.vi import JUDGE_LAW_SIMPLE_PROMPT, QA_ANSWER_PROMPT, RETRIEVE_LAW_PROMPT
 from ..retrieval.search import cluster_cases, direct_cases
 
@@ -36,6 +42,7 @@ DEFAULTS = {
     "top_k_cases": 5,
     "n_clusters": 2,
     "top_k_laws_text": 5,
+    "top_k_guidance": 3,
     "max_candidates": 8,
     "judge_mode": "gop",
     "law_text_chars": 4000,
@@ -47,10 +54,75 @@ DEFAULTS = {
 }
 
 
+# Display names for codes that are not obvious to the LLM.
+LAW_NAMES = {"XLVPHC": "Luật Xử lý vi phạm hành chính", "ND282": "Nghị định 282/2025/NĐ-CP"}
+
+
 def law_label(g: HierarGraph, law_node: str) -> str:
     d = g.node(law_node)
     code = d.get("bo_luat", "BLHS")
-    return f"{code} Điều {d['entry']}{d.get('suffix', '') or ''}"
+    return f"{LAW_NAMES.get(code, code)} Điều {d['entry']}{d.get('suffix', '') or ''}"
+
+
+def guidance_items(g: HierarGraph, law_node: str) -> List[Dict]:
+    return [r for r in g.node(law_node).get("related_laws") or [] if isinstance(r, dict) and r.get("loai") == "van_ban_huong_dan"]
+
+
+def _unit(v) -> np.ndarray:
+    v = np.asarray(v, dtype=float)
+    n = np.linalg.norm(v)
+    return v / n if n else v
+
+
+def guidance_index(g: HierarGraph, embed: Embed) -> List[Tuple[Dict, List[str], np.ndarray]]:
+    """Every guidance unit once, with the Law nodes it is attached to.
+    Kept on the graph object; embeddings come from the embedder's cache."""
+    cached = getattr(g, "_guidance_index", None)
+    if cached is not None:
+        return cached
+    by_key: Dict[Tuple[str, str], Tuple[Dict, List[str]]] = {}
+    for law in g.nodes_of("Law"):
+        for item in guidance_items(g, law):
+            key = (item.get("id", ""), item.get("text", ""))
+            by_key.setdefault(key, (item, []))[1].append(law)
+    index = [(item, laws, _unit(embed(item.get("text", "")))) for item, laws in by_key.values()]
+    g._guidance_index = index
+    return index
+
+
+def guidance_laws(g: HierarGraph, query_vec, embed: Embed, top_k: int) -> List[str]:
+    index = guidance_index(g, embed)
+    if not index:
+        return []
+    q = _unit(query_vec)
+    ranked = sorted(index, key=lambda x: -float(x[2] @ q))[:top_k]
+    out: List[str] = []
+    for _, laws, _ in ranked:
+        for law in laws:
+            if law not in out:
+                out.append(law)
+    return out
+
+
+def pick_guidance(items: List[Dict], query_vec, embed: Embed, budget: int) -> str:
+    """The guidance units closest to the question that fit in budget
+    chars, in that order. Điều 51 alone has 40 units (Nghị quyết
+    04/2025); cutting the concatenation lost the one that answers."""
+    if query_vec is None or embed is None:
+        ranked = items
+    else:
+        q = _unit(query_vec)
+        ranked = sorted(items, key=lambda it: -float(_unit(embed(it.get("text", ""))) @ q))
+    parts, used = [], 0
+    for it in ranked:
+        part = f"{it.get('id', '')}: {it.get('text', '')}"
+        if used and used + len(part) > budget:
+            continue
+        parts.append(part[: budget - used])
+        used += len(parts[-1]) + 3
+        if used >= budget:
+            break
+    return " | ".join(parts)
 
 
 def parse_crime_list(text: str) -> List[str]:
@@ -93,9 +165,11 @@ def retrieve_candidates(
             if law not in augment:
                 augment.append(law)
     routes["llm_doan_toi"] = augment
-    routes["van_ban_luat"] = [n for n, _ in g.search(embed(question), "Law", top_k=cfg["top_k_laws_text"])]
+    question_vec = embed(question)
+    routes["van_ban_luat"] = [n for n, _ in g.search(question_vec, "Law", top_k=cfg["top_k_laws_text"])]
+    routes["huong_dan"] = guidance_laws(g, question_vec, embed, cfg["top_k_guidance"])
 
-    order = ["llm_doan_toi", "van_ban_luat", "truc_tiep", "qua_cum"]
+    order = ["llm_doan_toi", "huong_dan", "van_ban_luat", "truc_tiep", "qua_cum"]
     candidates: List[str] = []
     for r in order:
         for law in routes[r]:
@@ -124,7 +198,8 @@ def judge_candidate(g: HierarGraph, law_node: str, question: str, generate: Gene
 
 
 def render_laws_for_answer(
-    g: HierarGraph, law_nodes: List[str], cfg: Dict, judgments: Optional[Dict[str, Dict]] = None
+    g: HierarGraph, law_nodes: List[str], cfg: Dict, judgments: Optional[Dict[str, Dict]] = None,
+    query_vec=None, embed: Optional[Embed] = None,
 ) -> str:
     parts = []
     for n in law_nodes:
@@ -135,9 +210,9 @@ def render_laws_for_answer(
             verdict = "thỏa mãn" if judgments[n]["ap_dung"] else "không thỏa mãn"
             block += f" (kiểm tra yếu tố cấu thành, chỉ tham khảo: {verdict})"
         block += f"\n{text}"
-        guidance = render_related([r for r in d.get("related_laws") or [] if isinstance(r, dict) and r.get("loai") == "van_ban_huong_dan"])
+        guidance = pick_guidance(guidance_items(g, n), query_vec, embed, cfg["guidance_chars"])
         if guidance:
-            block += f"\nHướng dẫn áp dụng: {guidance[: cfg['guidance_chars']]}"
+            block += f"\nHướng dẫn áp dụng: {guidance}"
         parts.append(block)
     return "\n\n".join(parts)
 
@@ -176,7 +251,9 @@ def answer_question(
         used = accepted + [n for n in retrieval["ung_vien"] if n not in accepted]
 
     raw = generate(
-        QA_ANSWER_PROMPT.format(question=question, laws=render_laws_for_answer(g, used, cfg, judgments)),
+        QA_ANSWER_PROMPT.format(
+            question=question, laws=render_laws_for_answer(g, used, cfg, judgments, embed(question), embed)
+        ),
         max_tokens=1024,
     )
     answer = parse_answer(raw)

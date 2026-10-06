@@ -38,6 +38,21 @@ BARE_RE = re.compile(DETAIL + ART + r"(?!\s*(?:của\s+)?(?:Luật|Nghị địn
 LIST_ITEM_RE = re.compile(DETAIL + r"(?:[Đđ]iều\s+)?(\d+[a-zđ]?)", re.IGNORECASE)
 QUOTED_LINE_RE = re.compile(r"^\s*(?:[Đđ]iều\s+\d+[a-zđ]?\.|\d+\.|[a-zđ]\))", re.IGNORECASE)
 LETTER_RE = re.compile(r"(\d+)/(?:\d{4}/)?TANDTC")
+RESOLUTION_RE = re.compile(r"(\d+/\d{4}/NQ-HĐTP|\d+/VBHN-TANDTC)")
+# Resolutions folded into a consolidated text that is in the graph.
+RESOLUTION_ALIASES = {"02/2018/NQ-HĐTP": "02/VBHN-TANDTC", "01/2022/NQ-HĐTP": "02/VBHN-TANDTC"}
+
+
+def cited_resolutions(answer: str, in_graph: Iterable[str]) -> List[str]:
+    """Nghị quyết HĐTP the lawyer cites that the graph has (directly or
+    through a consolidated text)."""
+    have = set(in_graph)
+    out = []
+    for so in RESOLUTION_RE.findall(answer or ""):
+        so = RESOLUTION_ALIASES.get(so, so)
+        if so in have and so not in out:
+            out.append(so)
+    return out
 
 
 def own_lines(answer: str) -> List[str]:
@@ -90,6 +105,7 @@ def build_gold(
     letters: Iterable[str],
     crimes_of: Dict[str, List[str]],
     manual: Optional[Dict[str, str]] = None,
+    resolutions: Iterable[str] = (),
 ) -> Dict:
     """crimes_of: "BLHS:173" -> crime names of that article (from the graph).
     manual: qa_number -> guidance item, for questions that reword an item
@@ -116,6 +132,7 @@ def build_gold(
         "nhom": "co_cong_van" if cited_letters or match else "khong_cong_van",
         "cong_van_trich": cited_letters,
         "cong_van_trung": match,
+        "nghi_quyet_trich": cited_resolutions(q.get("answer") or "", resolutions),
     }
 
 
