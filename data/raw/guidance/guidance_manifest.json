@@ -1,5 +1,5 @@
 {
-  "_note": "Văn bản hướng dẫn đang dùng: 3 Công văn giải đáp vướng mắc của TANDTC (người dùng tải ngày 2026-10-05), tách thành từng mục và gắn vào điều luật bằng vn_legal_graph/law/guidance_congvan.py -> guidance_links.json. Hai Thông tư liên tịch 17/2007 và 08/2015 (hướng dẫn BLHS 1999) đã bị xoá theo yêu cầu người dùng ngày 2026-10-05. Ngày 2026-10-06 Claude tải thêm Nghị quyết HĐTP từ nguồn chính thức (Công báo congbao.chinhphu.vn; vbpl.vn cho các văn bản không có trên Công báo); chưa tách và gắn vào graph.",
+  "_note": "Văn bản hướng dẫn đang dùng: 3 Công văn giải đáp vướng mắc của TANDTC (người dùng tải ngày 2026-10-05), tách thành từng mục và gắn vào điều luật bằng vn_legal_graph/law/guidance_congvan.py -> guidance_links.json. Hai Thông tư liên tịch 17/2007 và 08/2015 (hướng dẫn BLHS 1999) đã bị xoá theo yêu cầu người dùng ngày 2026-10-05. Ngày 2026-10-06 Claude tải thêm Nghị quyết HĐTP từ nguồn chính thức (Công báo congbao.chinhphu.vn; vbpl.vn cho các văn bản không có trên Công báo);  Nghị quyết HĐTP được tách bằng vn_legal_graph/law/guidance_nghiquyet.py.",
   "items": [
     {
       "so_hieu": "163/TANDTC-PC",
@@ -29,7 +29,7 @@
       "noi_dung": "Án treo (Điều 65 BLHS); hợp nhất NQ 02/2018 và 01/2022",
       "nguon": "congbao.chinhphu.vn/van-ban/van-ban-hop-nhat-so-02-vbhn-tandtc-37868.htm",
       "file": "data/raw/guidance/02_VBHN-TANDTC_2022.docx",
-      "trang_thai": "chua_gan"
+      "trang_thai": "dang_dung"
     },
     {
       "so_hieu": "06/2019/NQ-HĐTP",
@@ -38,7 +38,7 @@
       "noi_dung": "Điều 141-147 BLHS, xâm hại tình dục người dưới 18 tuổi",
       "nguon": "vbpl.vn (id 139108), toàn văn HTML chuyển sang docx",
       "file": "data/raw/guidance/06_2019_NQ-HDTP.docx",
-      "trang_thai": "chua_gan"
+      "trang_thai": "dang_dung"
     },
     {
       "so_hieu": "02/2019/NQ-HĐTP",
@@ -47,7 +47,7 @@
       "noi_dung": "Điều 150, 151 BLHS, mua bán người",
       "nguon": "congbao.chinhphu.vn/van-ban/nghi-quyet-so-02-2019-nq-hdtp-28509.htm",
       "file": "data/raw/guidance/02_2019_NQ-HDTP.docx",
-      "trang_thai": "chua_gan"
+      "trang_thai": "dang_dung"
     },
     {
       "so_hieu": "03/2025/NQ-HĐTP",
@@ -56,7 +56,67 @@
       "noi_dung": "Chuyển tử hình thành tù chung thân (Điều 4 Luật 86/2025)",
       "nguon": "vbpl.vn (id 183168), toàn văn HTML chuyển sang docx",
       "file": "data/raw/guidance/03_2025_NQ-HDTP.docx",
-      "trang_thai": "chua_gan"
+      "trang_thai": "dang_dung"
+    },
+    {
+      "so_hieu": "04/2025/NQ-HĐTP",
+      "ngay": "30/09/2025",
+      "loai": "nghi_quyet_hdtp",
+      "noi_dung": "Tình tiết giảm nhẹ, tăng nặng (Điều 51, 52 BLHS)",
+      "nguon": "người dùng tải 2026-10-06",
+      "file": "data/raw/guidance/04_2025_NQ-HDTP.docx",
+      "trang_thai": "dang_dung"
+    },
+    {
+      "so_hieu": "03/2024/NQ-HĐTP",
+      "ngay": "10/06/2024",
+      "loai": "nghi_quyet_hdtp",
+      "noi_dung": "Thời hiệu thi hành án, miễn/giảm hình phạt, hoãn, tạm đình chỉ (Điều 60-68 BLHS)",
+      "nguon": "người dùng tải 2026-10-06",
+      "file": "data/raw/guidance/03_2024_NQ-HDTP.docx",
+      "trang_thai": "dang_dung"
+    },
+    {
+      "so_hieu": "03/2020/NQ-HĐTP",
+      "ngay": "30/12/2020",
+      "loai": "nghi_quyet_hdtp",
+      "noi_dung": "Tội phạm tham nhũng và tội phạm khác về chức vụ",
+      "nguon": "người dùng tải 2026-10-06",
+      "file": "data/raw/guidance/03_2020_NQ-HDTP.docx",
+      "trang_thai": "dang_dung"
+    },
+    {
+      "so_hieu": "64/TANDTC-PC",
+      "ngay": "03/04/2019",
+      "loai": "cong_van_tandtc",
+      "noi_dung": "Giải đáp vướng mắc (phần I hình sự)",
+      "nguon": "người dùng tải 2026-10-06",
+      "file": "data/raw/guidance/64_TANDTC-PC_410624.docx",
+      "trang_thai": "dang_dung"
+    },
+    {
+      "so_hieu": "89/TANDTC-PC",
+      "ngay": "30/06/2020",
+      "loai": "cong_van_tandtc",
+      "noi_dung": "Giải đáp vướng mắc (phần I hình sự, II tố tụng hình sự)",
+      "nguon": "người dùng tải 2026-10-06",
+      "file": "data/raw/guidance/89_TANDTC-PC_447302.docx",
+      "trang_thai": "dang_dung"
+    },
+    {
+      "so_hieu": "196/TANDTC-PC",
+      "ngay": "03/10/2023",
+      "loai": "cong_van_tandtc",
+      "noi_dung": "Giải đáp vướng mắc (hình sự, tố tụng hình sự)",
+      "nguon": "người dùng tải 2026-10-06",
+      "file": "data/raw/guidance/196_TANDTC-PC_581498.docx",
+      "trang_thai": "dang_dung"
+    }
+  ],
+  "chua_co": [
+    {
+      "so_hieu": "136/TANDTC-PC (2020)",
+      "ly_do": "đính chính mục 13 phần I Công văn 89 (đánh bạc). File người dùng tải là 136/TANDTC-PC ngày 13/08/2021 về án lệ, không phải văn bản này; đã bỏ."
     }
   ]
 }
