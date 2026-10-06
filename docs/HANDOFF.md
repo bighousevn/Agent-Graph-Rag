@@ -758,6 +758,46 @@ khoản/điểm (chỉ tính khi luật sư có ghi khoản của điều đó):
 3. Prompt: khi Công văn nói về chủ thể khác (hộ kinh doanh vs doanh nghiệp) phải so điều kiện trước khi áp dụng; xét đủ các điểm của khoản cao hơn (13038).
 4. Người duyệt mẫu ~10 câu để kiểm tra LLM chấm.
 
+### 11.3. Thêm Nghị quyết HĐTP và Công văn; chạy lại 40 câu (2026-10-06)
+
+**Nguồn mới** (chi tiết trong `data/raw/guidance/guidance_manifest.json`):
+- Nghị quyết HĐTP 04/2025, 03/2025, 03/2024, 03/2020, 06/2019, 02/2019 và VBHN 02/VBHN-TANDTC (án treo; gộp NQ 02/2018 + 01/2022).
+- Công văn 64/TANDTC-PC, 89/TANDTC-PC, 196/TANDTC-PC. File "136" người dùng tải là văn bản năm 2021 về án lệ, không phải bản đính chính Công văn 89 → đã bỏ.
+- Luật XLVPHC (171/2026/VBHN), NĐ 282/2025 (thay NĐ 144/2021), BLTTHS chuyển sang 172/2026/VBHN (thêm Luật 11/2026/QH16; 15 điều khác về câu chữ).
+- Claude tự tải được từ Công báo; vbpl.vn chỉ đọc được qua API công khai `doc/{id}` (tìm kiếm bị chặn chống bot, không vượt qua). NQ 01/2017 mà luật sư trích là biểu mẫu tố tụng dân sự (trích nhầm).
+
+**Code:**
+- `law/guidance_nghiquyet.py`: tách Nghị quyết theo khoản của từng Điều; gắn vào điều BLHS được nhắc (dạng liệt kê "khoản 1 Điều 141, … của Bộ luật Hình sự"); bỏ "Điều N của Nghị quyết này", "Điều 4 Luật sửa đổi…", số Điều tiêu đề của chính Nghị quyết. 03/2025 không nhắc điều BLHS → gắn mặc định Điều 40.
+- Tổng **294 mục hướng dẫn**, gắn vào 78 điều BLHS (Điều 65: 42, 51: 40, 52: 26…).
+- Pipeline: nhánh `huong_dan` (mục hướng dẫn gần câu hỏi → điều luật được gắn); mỗi điều chọn các mục gần câu hỏi nhất cho đủ 4.000 ký tự (trước đây cắt theo thứ tự nên mất mục đúng).
+- Graph: **1.117 Law** (408 BLHS + 492 BLTTHS + 146 XLVPHC + 71 NĐ 282), 315 Crime, 257 Case, 10 Cluster.
+- `run_qa_pilot.py --ids-from`: chạy lại đúng bộ câu cũ, in câu tốt hơn / kém hơn; thêm nhóm `co_nghi_quyet`.
+
+**Kết quả** (`outputs/qa_pilot_deepseek-flash_tudong40_nq.json`, cùng 40 câu với 11.2):
+
+| | lần 11.2 | lần này |
+|---|---|---|
+| kết luận đúng / một phần / sai | 24 / 5 / 11 | **35 / 4 / 1** |
+| điều: recall / precision | 0,65 / 0,67 | 0,80 / 0,63 |
+| tội danh precision | 0,74 | 0,84 |
+| số từ TB | 56 | 64 |
+
+13 câu tốt hơn, 1 kém hơn (12134: đúng → một phần). Nhóm `co_nghi_quyet` (15 câu): 13 đúng, 2 một phần.
+
+**Đọc kết quả cho đúng — phần lớn mức tăng là lạc quan:**
+- Chia theo mức trùng của câu hỏi với văn bản hướng dẫn (cụm 3 từ):
+  - **trùng ≥ 0,3 (21 câu, câu hỏi được viết lại từ Nghị quyết/Công văn):** 11 → **21 đúng**.
+  - **trùng < 0,3 (19 câu, câu hỏi độc lập):** 13 → **14 đúng**, sai 3 → 1, một phần 3 → 4.
+- luatvietnam viết nhiều câu hỏi từ chính ví dụ trong NQ 04/2025 (12263 phòng vệ, 12286 trộm xe máy) và Công văn 196 (12130, 12131: trùng 0,80–0,85). Hệ thống đúng là nhờ tìm ra đúng mục — chứng minh cơ chế hoạt động — nhưng không đo được khả năng với tình huống mới.
+- LLM không ổn định: 13038 đúng (lần 2) → sai (11.2) → đúng (lần này) dù phần liên quan không đổi; sai khác ±1–2 câu là nhiễu.
+- Precision điều luật giảm nhẹ: trả lời trích thêm Điều 51/52 và điều từ nhánh hướng dẫn.
+- Còn sai: 12133 (không tìm ra BLTTHS về giám định; nhánh hướng dẫn kéo về Điều 60/65).
+
+**Bước tiếp theo đề xuất:**
+1. Báo cáo cố định theo nhóm "câu hỏi độc lập / lấy từ hướng dẫn" (đưa phép chia trùng cụm 3 từ vào script); mở rộng tập câu độc lập (chọn từ 187 câu) để có số đáng tin.
+2. Chạy lặp 2–3 lần để đo nhiễu của LLM.
+3. Giảm nhiễu tuyến `qua_cum` (cụm toàn án ma túy).
+
 ## 10. Tham chiếu
 
 - Sơ đồ tiến độ và kiến trúc truy vấn: <https://claude.ai/artifact/BMLpjNNcp1J9sgwnoyUX11> (artifact riêng của người dùng). Lưu ý: sơ đồ truy vấn trong đó còn thiếu 2 bước đã nêu ở mục 4.2.
