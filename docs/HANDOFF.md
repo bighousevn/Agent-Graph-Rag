@@ -689,10 +689,7 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
 - **3 Công văn TANDTC** trong `data/raw/guidance/`: 163/TANDTC-PC (10/09/2024), 250/TANDTC-PC (28/04/2026), 01/TANDTC-PC (05/01/2026).
   - `guidance_congvan.py` tách thành 31 mục hình sự, rồi gắn vào điều luật theo cách phân biệt bộ luật (`BLHS:134`, `BLTTHS:155`).
 - **Đã xoá theo yêu cầu:** BLHS bản gốc 2015, TTLT 17/2007 và 08/2015 (cùng code trích TTLT), file tải nhầm 01/2017.
-- **BLHS hiện vẫn là `11_VBHN`.** File BLHS 2025 (135/VBHN-VPQH, có Luật 86/2025) người dùng đưa chỉ là **Công báo số 1351+1352, gồm Điều 1–68** ("Xem tiếp Công báo số 1353 + 1354"). File gốc `.doc` nằm ở `data/raw/law/`, chưa commit.
-  - **Chờ người dùng gửi bản đầy đủ** để thay `11_VBHN`. Khi thay phải chạy lại `judge_dep`.
-  - Bản BLHS 2025 có thêm Điều 256a, mà Công văn 250 có trích.
-- Graph: **899 Law** (407 BLHS + 492 BLTTHS), 314 Crime, 257 Case, 10 Cluster.
+- **BLHS đã thay bằng 135/VBHN-VPQH (2025)**, xem mục 11.2. `11_VBHN` đã xoá. (Lần chạy 2 bên dưới vẫn dùng `11_VBHN`.)
 
 **Sửa ở bước trả lời:**
 - Mọi ứng viên đều được đưa vào bước trả lời, mỗi điều kèm kết quả judge làm gợi ý (`loc_theo_judge=False`; tuỳ chọn `--loc-theo-judge` giữ cách lọc cứng của bài gốc).
@@ -718,6 +715,48 @@ Claude được tự chạy các bước không cần key: `--dry-run`, `build_g
 1. Sửa prompt để câu đầu trả lời thẳng.
 2. Mở rộng đánh giá lên 20–50 câu: gold tự động (trích "Điều N … BLHS/BLTTHS" từ đáp án luật sư) và LLM chấm kết luận, có người duyệt mẫu. Báo riêng nhóm câu có và không có Công văn giải đáp sẵn.
 3. Thay BLHS bằng bản 2025 đầy đủ khi có file.
+
+### 11.2. BLHS 2025 và đánh giá 40 câu (2026-10-06)
+
+**BLHS = Văn bản hợp nhất 135/VBHN-VPQH ngày 05/09/2025** (Luật 12/2017, 59/2024, 86/2025).
+- File người dùng đưa chỉ là Công báo 1351+1352. Claude tải đủ 4 số (1351+1352 … 1357+1358) từ congbao.chinhphu.vn (trang văn bản 46165). Server g7.cdnchinhphu.vn thiếu chứng chỉ trung gian GlobalSign, nên tải bằng `curl --cacert` có thêm chứng chỉ đó (vẫn kiểm tra SSL). Phần 1 trùng md5 với file của người dùng.
+- `.doc` → `data/raw/law/2025_135_VBHN-VPQH_BLHS_p1..p4.docx` (LibreOffice). `parse_blhs.join_gazette_parts` nối các số: bỏ dòng "(Xem tiếp…)" và khối đầu số tiếp theo; nhận tiêu đề "Mục N" in trên 2 dòng (tên có thể xuống dòng).
+- Kết quả: **408 điều** (thêm 256a). Cấu trúc của 407 điều chung khớp hoàn toàn bản cũ; 55 điều khác nội dung (ma túy 248–259, bỏ tử hình ở 109, 110, 114, 194, 250, 353, 354, 421 …).
+- Sửa lỗi `crime_title_index` bỏ mất hậu tố (256a → 256).
+- judge_dep: 315 điều tội, thiếu **232** (LLM trả quá 4096 token; bản cũ cũng thiếu) → dùng judge đơn giản.
+- Graph: **900 Law** (408 + 492 BLTTHS), 315 Crime, 257 Case, 10 Cluster (đã tóm tắt lại).
+- Lưu ý: án ViCSR (2017–2022) xử theo luật trước Luật 86/2025.
+
+**Prompt:** câu đầu `cau_tra_loi` phải trả lời thẳng (Có/Không, tội + khung, việc phải làm); không mở đầu bằng ý bị bác bỏ sau đó.
+
+**Đáp án chuẩn tự động** (`vn_legal_graph/qa/auto_gold.py`, `run_qa_pilot.py --auto-gold`):
+- Điều BLHS/BLTTHS luật sư trích trong lời của mình (bỏ dòng chép nguyên văn luật; "khoản 2 Điều 321" không ghi bộ luật chỉ tính khi điều đó đã được ghi bộ luật ở chỗ khác; "Điều 1 Luật sửa đổi…" không tính). Đối chiếu 5 câu gán tay: không sót điều nào, nhưng tính cả điều luật sư nêu để loại trừ (vd 353 ở 12856) → recall hơi bi quan.
+- Nhóm `co_cong_van`: đáp án trích Công văn có trong graph, hoặc câu hỏi trùng một mục Công văn (cụm 3 từ ≥ 0,5; thật sự trùng ≥ 0,77, còn lại ≤ 0,35), hoặc có trong `data/qa/cong_van_tay.json` (12856, viết lại khác chữ; embedding cũng không bắt được).
+- Tội danh: không gán được tội bắt buộc, chỉ đo precision (tội của các điều luật sư trích).
+- 187/231 câu có trích BLHS/BLTTHS. Chọn 40: cả 6 câu có Công văn + 34 câu đầu file.
+
+**Kết quả** (`outputs/qa_pilot_deepseek-flash_tudong40.json`, deepseek-flash):
+
+| | 40 câu | có Công văn (6) | không Công văn (34) |
+|---|---|---|---|
+| kết luận đúng / một phần / sai | 24 / 5 / 11 | **6 / 0 / 0** | 18 / 5 / 11 |
+| điều: recall / precision | 0,65 / 0,67 | 0,78 / 0,92 | 0,62 / 0,62 |
+| tội danh precision | 0,74 | 0,92 | 0,71 |
+| số từ TB | 56 | 59 | 55 |
+
+khoản/điểm (chỉ tính khi luật sư có ghi khoản của điều đó): 11 câu, đều khớp.
+
+**Phân tích 11 câu sai** (đã đọc từng câu):
+- **Thiếu văn bản (5):** 15/40 đáp án dựa vào Nghị quyết HĐTP (04/2025 về tình tiết tăng nặng/giảm nhẹ; 03/2024; 03/2020), chưa có trong graph. Câu hỏi "Như thế nào là…" (12344, 12330, 12317) → hệ thống trả "không đủ căn cứ" (đúng theo prompt). 12110 thiếu cả Điều 63 trong ứng viên. Trong 15 câu có NQ: 6 đúng, 3 một phần, 6 sai; 25 câu còn lại: 18 đúng, 2 một phần, 5 sai.
+- **Truy xuất trượt (2):** 12133 (BLTTHS 206/127/132/133 không vào ứng viên); 12131 (có Điều 268 nhưng không thấy định nghĩa).
+- **Lập luận sai (4–5):** 13038 (lần 2 đúng, giờ kết luận khoản 1, bỏ qua điểm c khoản 2 "sử dụng mạng internet"); 12130 (áp Công văn 163 về hộ kinh doanh cho nhân viên doanh nghiệp viễn thông → lạm dụng tín nhiệm thay vì tham ô); 12100, 12263, 12286 (khác đánh giá của luật sư).
+- **Nhiễu ứng viên:** 249/251/247 (ma túy) gần như luôn có mặt, đến từ tuyến `qua_cum` (cụm án ma túy lớn).
+
+**Bước tiếp theo đề xuất:**
+1. Thêm Nghị quyết HĐTP 04/2025, 03/2024 (văn bản hướng dẫn, cùng cách Công văn) → nhắm 5–6 câu sai.
+2. Giảm nhiễu tuyến `qua_cum` (ngưỡng cosine hoặc bỏ cụm khi câu hỏi không về ma túy) và tăng `top_k_laws_text` cho BLTTHS.
+3. Prompt: khi Công văn nói về chủ thể khác (hộ kinh doanh vs doanh nghiệp) phải so điều kiện trước khi áp dụng; xét đủ các điểm của khoản cao hơn (13038).
+4. Người duyệt mẫu ~10 câu để kiểm tra LLM chấm.
 
 ## 10. Tham chiếu
 
