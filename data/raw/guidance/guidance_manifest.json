@@ -1,5 +1,5 @@
 {
-  "_note": "Văn bản hướng dẫn đang dùng: 3 Công văn giải đáp vướng mắc của TANDTC (người dùng tải ngày 2026-10-05), tách thành từng mục và gắn vào điều luật bằng vn_legal_graph/law/guidance_congvan.py -> guidance_links.json. Hai Thông tư liên tịch 17/2007 và 08/2015 (hướng dẫn BLHS 1999) đã bị xoá theo yêu cầu người dùng ngày 2026-10-05.",
+  "_note": "Văn bản hướng dẫn đang dùng: 3 Công văn giải đáp vướng mắc của TANDTC (người dùng tải ngày 2026-10-05), tách thành từng mục và gắn vào điều luật bằng vn_legal_graph/law/guidance_congvan.py -> guidance_links.json. Hai Thông tư liên tịch 17/2007 và 08/2015 (hướng dẫn BLHS 1999) đã bị xoá theo yêu cầu người dùng ngày 2026-10-05. Ngày 2026-10-06 Claude tải thêm Nghị quyết HĐTP từ nguồn chính thức (Công báo congbao.chinhphu.vn; vbpl.vn cho các văn bản không có trên Công báo); chưa tách và gắn vào graph.",
   "items": [
     {
       "so_hieu": "163/TANDTC-PC",
@@ -21,6 +21,42 @@
       "loai": "cong_van_tandtc",
       "file": "data/raw/guidance/01_TANDTC-PC_688214.docx",
       "trang_thai": "dang_dung"
+    },
+    {
+      "so_hieu": "02/VBHN-TANDTC",
+      "ngay": "07/09/2022",
+      "loai": "nghi_quyet_hdtp",
+      "noi_dung": "Án treo (Điều 65 BLHS); hợp nhất NQ 02/2018 và 01/2022",
+      "nguon": "congbao.chinhphu.vn/van-ban/van-ban-hop-nhat-so-02-vbhn-tandtc-37868.htm",
+      "file": "data/raw/guidance/02_VBHN-TANDTC_2022.docx",
+      "trang_thai": "chua_gan"
+    },
+    {
+      "so_hieu": "06/2019/NQ-HĐTP",
+      "ngay": "01/10/2019",
+      "loai": "nghi_quyet_hdtp",
+      "noi_dung": "Điều 141-147 BLHS, xâm hại tình dục người dưới 18 tuổi",
+      "nguon": "vbpl.vn (id 139108), toàn văn HTML chuyển sang docx",
+      "file": "data/raw/guidance/06_2019_NQ-HDTP.docx",
+      "trang_thai": "chua_gan"
+    },
+    {
+      "so_hieu": "02/2019/NQ-HĐTP",
+      "ngay": "11/01/2019",
+      "loai": "nghi_quyet_hdtp",
+      "noi_dung": "Điều 150, 151 BLHS, mua bán người",
+      "nguon": "congbao.chinhphu.vn/van-ban/nghi-quyet-so-02-2019-nq-hdtp-28509.htm",
+      "file": "data/raw/guidance/02_2019_NQ-HDTP.docx",
+      "trang_thai": "chua_gan"
+    },
+    {
+      "so_hieu": "03/2025/NQ-HĐTP",
+      "ngay": "30/09/2025",
+      "loai": "nghi_quyet_hdtp",
+      "noi_dung": "Chuyển tử hình thành tù chung thân (Điều 4 Luật 86/2025)",
+      "nguon": "vbpl.vn (id 183168), toàn văn HTML chuyển sang docx",
+      "file": "data/raw/guidance/03_2025_NQ-HDTP.docx",
+      "trang_thai": "chua_gan"
     }
   ]
 }
