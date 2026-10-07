@@ -45,7 +45,8 @@ DEFAULTS = {
     # "loc": the original hard filter (rejected articles are dropped).
     # "goi-y": every candidate goes to the Adjudicator with the Auditor's
     # verdict as a hint (the trial run: judge_law rejected the right article
-    # in 4/22 cases, then the Adjudicator never saw it).
+    # in 4/22 cases, then the Adjudicator never saw it). "bo-qua": every
+    # candidate, no verdicts (ablation: candidates vs Auditor).
     "auditor": "loc",
 }
 
@@ -148,7 +149,9 @@ def analyze_defendant(g, name: str, description: str, generate: Generate, embed:
     used_cases = filter_facts(g, accepted, rerank["an"])
 
     # Adjudicator
-    if cfg["auditor"] == "goi-y":
+    if cfg["auditor"] == "bo-qua":  # ablation: candidates only, no Auditor verdicts
+        laws_text = format_laws(g, candidates)
+    elif cfg["auditor"] == "goi-y":
         ordered = accepted + [n for n in candidates if n not in accepted]
         laws_text = format_laws(g, ordered, {n: judgments[n]["ap_dung"] for n in candidates})
     else:
@@ -203,12 +206,22 @@ def union_prediction(per_defendant: List[Dict]) -> Dict:
     return {"du_doan_toi_danh": crimes, "du_doan_dieu": articles, "du_doan_tu_thang": months}
 
 
-def adjudicate_without_graph(generate: Generate, fact: str) -> Dict:
+def adjudicate_without_graph(generate: Generate, fact: str, segment_defendants: bool = False, max_defendants: int = 4) -> Dict:
     """Baseline: the Adjudicator alone, no retrieval and no candidate
-    articles (what the LLM knows by itself)."""
-    raw = generate(JUDGE_CRIME_ALL_PROMPT + JUDGE_CRIME_ALL_INPUT_TEMPLATE.format(law="(không có)", case=fact), max_tokens=1024)
-    v = parse_adjudication(raw) or {"toi_danh": [], "dieu_luat": [], "hinh_phat": {}}
-    return {"adjudicator": v, **union_prediction([{"adjudicator": v}])}
+    articles (what the LLM knows by itself). With segment_defendants, per
+    defendant as in the pipeline, to separate the effect of segmentation
+    from that of the graph."""
+    def one(name: str, text: str) -> Dict:
+        case = f"Bị cáo: {name}. Diễn biến: {text}" if segment_defendants else text
+        raw = generate(JUDGE_CRIME_ALL_PROMPT + JUDGE_CRIME_ALL_INPUT_TEMPLATE.format(law="(không có)", case=case), max_tokens=1024)
+        return {"bi_cao": name, "adjudicator": parse_adjudication(raw) or {"toi_danh": [], "dieu_luat": [], "hinh_phat": {}}}
+
+    if not segment_defendants:
+        per = [one("", fact)]
+        return {"adjudicator": per[0]["adjudicator"], **union_prediction(per)}
+    names = list_defendants(generate, fact, max_defendants)
+    per = [one(n, segment(generate, fact, n)) for n in names] if names else [one("bị cáo", fact)]
+    return {"bi_cao": names, "theo_bi_cao": per, **union_prediction(per)}
 
 
 # ---- Scoring, as evaluation/evaluate_results.py: exact-match accuracy and

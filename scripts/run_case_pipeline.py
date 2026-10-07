@@ -32,8 +32,9 @@ def main() -> None:
     parser.add_argument("--backend", default="pkl", choices=["pkl", "neo4j"])
     parser.add_argument("--per-crime", type=int, default=None, help="Only N test cases per crime (trial).")
     parser.add_argument("--without-graph", action="store_true", help="Baseline: Adjudicator without retrieval.")
-    parser.add_argument("--auditor", default="loc", choices=["loc", "goi-y"],
-                        help="loc: original hard filter; goi-y: all candidates, Auditor verdict as a hint.")
+    parser.add_argument("--segment", action="store_true", help="With --without-graph: per defendant, as the pipeline.")
+    parser.add_argument("--auditor", default="loc", choices=["loc", "goi-y", "bo-qua"],
+                        help="loc: original hard filter; goi-y: all candidates, Auditor verdict as a hint; bo-qua: all candidates, no verdicts.")
     parser.add_argument("--max-defendants", type=int, default=DEFAULTS["max_defendants"])
     parser.add_argument("--tag", default="")
     parser.add_argument("--dotenv-path", default=".env")
@@ -80,7 +81,7 @@ def main() -> None:
     results = []
     for i, c in enumerate(cases, 1):
         if args.without_graph:
-            out = adjudicate_without_graph(client.generate, c["dien_bien"][: DEFAULTS["fact_chars"]])
+            out = adjudicate_without_graph(client.generate, c["dien_bien"][: DEFAULTS["fact_chars"]], args.segment, args.max_defendants)
         else:
             out = analyze_case(g, c["dien_bien"], client.generate, embedder.encode_long_text, {"max_defendants": args.max_defendants, "auditor": args.auditor})
         s = score_case(out, c["dieu"], c["toi_danh"], crime_articles)
@@ -89,7 +90,7 @@ def main() -> None:
               f"{'✓' if s['dieu_dung_het'] else '✗'} | bị cáo: {out.get('bi_cao', '-')}")
 
     model_slug = re.sub(r"[^\w.-]", "_", client.llm_config.model)
-    name = "case_adjudicator_only" if args.without_graph else "case_pipeline"
+    name = ("case_adjudicator_only" + ("_segment" if args.segment else "")) if args.without_graph else "case_pipeline"
     path = f"outputs/{name}_{model_slug}{'_' + args.tag if args.tag else ''}.json"
     metrics = summarize([r["diem"] for r in results])
     by_crime = {}

@@ -847,6 +847,37 @@ Yếu: 175, 341 (R@1 0); 321 qua đặc trưng 0,22 nhưng diễn biến thô 0,
 
 **Còn lại so với bài gốc:** tách vụ án theo bị cáo; ba agent Researcher / Auditor / Adjudicator (ghi `insights` lên Law); `judge_crime_all` trên tập án test.
 
+### 11.6. Pipeline vụ án Researcher → Auditor → Adjudicator (2026-10-07)
+
+**Đối chiếu code gốc** (clone `XMUDeepLIT/LegalGraphRAG` @a3c9c30): không có class agent nào. Researcher / Auditor / Adjudicator trong bài (hình `images/method.png`) là các bước của `core/utils/util.py::analyze_case`:
+- Researcher = `get_features` + `query_similar_nodes` (cụm + án trực tiếp + LLM rerank) + `retrieve_law`;
+- Auditor = `judge_law` (lọc cứng) + `filter_facts`;
+- Adjudicator = `judge_crime_all` (`JUDGE_CRIME_ALL_PROMPT`); tham số án tương tự được truyền nhưng không dùng trong prompt.
+- `update_insights_in_graph` được import nhưng không gọi → `insights` luôn rỗng, không cần làm.
+
+**Code:** `vn_legal_graph/judge/case_pipeline.py`, `scripts/run_case_pipeline.py` (đã thêm vào allow list theo yêu cầu người dùng).
+- Thêm `LIST_DEFENDANTS_PROMPT` (CAIL có sẵn tên bị cáo, án Việt Nam không) rồi `CASE_SEG_PROMPT` theo từng bị cáo; tối đa 4 bị cáo; trung bình 2,1 bị cáo/án.
+- Ứng viên: chỉ điều tội BLHS (Law có cạnh Crime), như bài gốc.
+- Chấm như `evaluation/evaluate_results.py` (accuracy khớp cả tập, micro-F1) ở **cấp bản án** (nhãn của mình theo bản án: hợp kết quả các bị cáo); điều phần chung (51, 52, 38…) không tính.
+- Tuỳ chọn: `--auditor loc` (bài gốc) / `goi-y` (mọi ứng viên + kết quả judge làm gợi ý) / `bo-qua` (mọi ứng viên, không judge); `--without-graph [--segment]`.
+
+**Kết quả 55 án test** (deepseek-flash):
+
+| cấu hình | tội acc | tội F1 | điều acc | điều F1 |
+|---|---|---|---|---|
+| không graph, không tách bị cáo | **0,69** | **0,84** | **0,67** | **0,84** |
+| không graph, tách bị cáo | 0,67 | 0,84 | 0,62 | 0,81 |
+| graph: ứng viên, bỏ Auditor | 0,60 | 0,80 | 0,60 | 0,80 |
+| graph: Auditor gợi ý | 0,51 | 0,74 | 0,51 | 0,74 |
+| graph: Auditor lọc cứng (bài gốc) | 0,53 | 0,75 | 0,53 | 0,75 |
+
+**Phân tích:**
+- Tách bị cáo gây hại ít (−0,02 tội acc).
+- **Auditor (`judge_law`) là chỗ hại nhất**: lượt lọc cứng sai 26 án, trong đó 13 do Auditor bác điều đúng (vd 284299: 123 bị bác ở 3 bị cáo; 284362: bác 175, nhận 353), 7 do Adjudicator thêm điều thừa, 5 do Researcher không tìm ra điều đúng. Chế độ gợi ý cũng không cứu được: Adjudicator vẫn nghe theo "không thỏa mãn".
+- Danh sách ứng viên từ graph vừa giúp vừa hại (so với không graph có tách): sửa 7 án (số điều BLHS 1999 "138", "140" → 173, 175; tìm đủ 174 + 341), làm hỏng 8 án (bị kéo sang điều gần: 123 → 134, 175 → 353/174, 249 → 251).
+- Lỗi chung cả hai: 322 + 321 (người tổ chức và người chơi đánh bạc) — 0/5 ở mọi cấu hình; nhãn ViCSR nhiễu (2882 nhãn 321 nhưng diễn biến ma túy; 1562, 370 diễn biến sơ sài).
+- Lưu ý: 55 án, chênh 3–4 án là trong phạm vi nhiễu. deepseek-flash biết BLHS khá tốt; bài gốc dùng Qwen3-8B, nơi tri thức từ graph có ích hơn.
+
 ## 10. Tham chiếu
 
 - Sơ đồ tiến độ và kiến trúc truy vấn: <https://claude.ai/artifact/BMLpjNNcp1J9sgwnoyUX11> (artifact riêng của người dùng). Lưu ý: sơ đồ truy vấn trong đó còn thiếu 2 bước đã nêu ở mục 4.2.

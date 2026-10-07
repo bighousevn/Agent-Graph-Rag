@@ -83,3 +83,19 @@ def test_auditor_hint_mode_keeps_rejected_articles():
     assert "Điều 173 Bộ luật Hình sự (kiểm tra yếu tố cấu thành, chỉ tham khảo: thỏa mãn)" in text
     assert "Điều 249 Bộ luật Hình sự (kiểm tra yếu tố cấu thành, chỉ tham khảo: không thỏa mãn)" in text
     assert "chỉ tham khảo" not in format_laws(g, ["law:173"])
+
+
+def test_without_graph_segmented_unions_defendants():
+    from vn_legal_graph.judge.case_pipeline import adjudicate_without_graph
+
+    def fake(prompt, max_tokens=None):
+        if "liệt kê tên các bị cáo" in prompt:
+            return '["a", "b"]'
+        if "sắp xếp lại thành một đoạn mô tả" in prompt:
+            return "đánh bạc" if "Tên bị cáo: a" in prompt else "tổ chức đánh bạc"
+        art = "322" if "tổ chức" in prompt.split("Vụ án:")[1] else "321"
+        return json.dumps({"toi_danh": [], "dieu_luat": [f"Điều {art}"]})
+
+    out = adjudicate_without_graph(fake, "a đánh bạc, b tổ chức", segment_defendants=True)
+    assert out["du_doan_dieu"] == ["321", "322"] and out["bi_cao"] == ["a", "b"]
+    assert adjudicate_without_graph(fake, "x đánh bạc")["du_doan_dieu"] == ["321"]
