@@ -878,6 +878,25 @@ Yếu: 175, 341 (R@1 0); 321 qua đặc trưng 0,22 nhưng diễn biến thô 0,
 - Lỗi chung cả hai: 322 + 321 (người tổ chức và người chơi đánh bạc) — 0/5 ở mọi cấu hình; nhãn ViCSR nhiễu (2882 nhãn 321 nhưng diễn biến ma túy; 1562, 370 diễn biến sơ sài).
 - Lưu ý: 55 án, chênh 3–4 án là trong phạm vi nhiễu. deepseek-flash biết BLHS khá tốt; bài gốc dùng Qwen3-8B, nơi tri thức từ graph có ích hơn.
 
+### 11.7. Mở rộng: cho Adjudicator xem án tương tự và văn bản hướng dẫn (2026-10-07, người dùng đề xuất)
+
+Bài gốc không cho Adjudicator xem án tương tự (`judge_crime_all` bỏ qua `retrieved_facts`). Tuỳ chọn `--adjudicator-context`:
+- `an`: thêm các án tìm được (đặc trưng ≤800 ký tự, tội danh, điều). Với `loc` là án còn lại sau `filter_facts`; với `bo-qua`/`goi-y` là mọi án sau rerank.
+- `an+huong-dan`: thêm đơn vị Công văn/Nghị quyết gắn với các điều đưa vào, gần đặc trưng nhất trước, ≤2000 ký tự.
+
+| cấu hình | tội acc | tội F1 | điều acc | điều F1 |
+|---|---|---|---|---|
+| không graph (để so) | **0,69** | **0,84** | **0,67** | **0,84** |
+| bỏ Auditor | 0,60 | 0,80 | 0,60 | 0,80 |
+| bỏ Auditor + án | 0,62 | 0,79 | 0,62 | 0,79 |
+| bỏ Auditor + án + hướng dẫn | 0,58 | 0,77 | 0,60 | 0,78 |
+| lọc cứng (bài gốc) | 0,53 | 0,75 | 0,53 | 0,75 |
+| lọc cứng + án + hướng dẫn | 0,56 | 0,77 | 0,58 | 0,80 |
+
+- Án tương tự sửa được: 251 vs 249 (7680), thiếu 249 (7953), 321 không phải 322 (198738), thêm đủ 173 + 249 + 175 (4443). Nhưng kéo 175 → 174 khi án tìm được là án lừa đảo (3009, 342504).
+- Văn bản hướng dẫn không giúp thêm (ròng −1 đến −2 án so với chỉ thêm án).
+- Mọi chênh lệch đều 2–5 án trên 55, trong phạm vi nhiễu; vẫn dưới mức không graph. 322 vẫn 0/5.
+
 ## 10. Tham chiếu
 
 - Sơ đồ tiến độ và kiến trúc truy vấn: <https://claude.ai/artifact/BMLpjNNcp1J9sgwnoyUX11> (artifact riêng của người dùng). Lưu ý: sơ đồ truy vấn trong đó còn thiếu 2 bước đã nêu ở mục 4.2.

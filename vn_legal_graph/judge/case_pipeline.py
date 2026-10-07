@@ -15,11 +15,17 @@ Vietnamese case: per defendant, Researcher -> Auditor -> Adjudicator.
        are passed along but not shown to the LLM (judge_crime_all ignores
        its retrieved_facts argument).
 
+Extension (not in the original), adjudicator_context: "an" also shows the
+Adjudicator the retrieved cases it would pass (features, crimes, articles);
+"an+huong-dan" adds the guidance units (Công văn, Nghị quyết) attached to
+the articles it shows, the closest to the defendant's features first.
+
 Candidates are BLHS crime articles (Law nodes with Crime edges), the only
 ones the original judges.
 """
 from __future__ import annotations
 
+import ast
 import json
 import re
 from typing import Callable, Dict, List, Optional
@@ -32,7 +38,7 @@ from ..prompts.vi import (
     LIST_DEFENDANTS_PROMPT,
 )
 from ..qa.pipeline import DEFAULTS as QA_DEFAULTS
-from ..qa.pipeline import judge_candidate, llm_crime_laws, parse_crime_list, reranked_cases
+from ..qa.pipeline import guidance_items, judge_candidate, llm_crime_laws, parse_crime_list, pick_guidance, reranked_cases
 
 Generate = Callable[..., str]
 Embed = Callable[[str], object]
@@ -48,7 +54,13 @@ DEFAULTS = {
     # in 4/22 cases, then the Adjudicator never saw it). "bo-qua": every
     # candidate, no verdicts (ablation: candidates vs Auditor).
     "auditor": "loc",
+    # "": as the original (articles only); "an": plus the retrieved cases;
+    # "an+huong-dan": plus the guidance attached to the shown articles.
+    "adjudicator_context": "",
+    "case_chars": 800,
+    "guidance_chars": 2000,
 }
+ADJUDICATOR_CONTEXTS = ("", "an", "an+huong-dan")
 
 PENALTY_KEYS = ("tu_hinh", "tu_co_thoi_han_thang", "chung_than")
 
@@ -86,6 +98,54 @@ def format_laws(g, law_nodes: List[str], verdicts: Optional[Dict[str, bool]] = N
         parts.append(f"Điều {d['entry']}{d.get('suffix', '') or ''} Bộ luật Hình sự{hint}, tội danh: {', '.join(crimes)}. "
                      f"Nội dung: {d['description']}\n---")
     return "\n".join(parts)
+
+
+def _as_list(v) -> List[str]:
+    if isinstance(v, (list, tuple)):
+        return [str(x) for x in v]
+    try:
+        parsed = ast.literal_eval(v) if isinstance(v, str) else v
+    except (ValueError, SyntaxError):
+        return [str(v)] if v else []
+    return [str(x) for x in parsed] if isinstance(parsed, (list, tuple)) else ([str(parsed)] if parsed else [])
+
+
+def format_cases(g, case_nodes: List[str], chars: int) -> str:
+    """Original format_fact (crimes, then the case description), with the
+    articles the court applied."""
+    parts = []
+    for i, n in enumerate(case_nodes, 1):
+        d = g.node(n)
+        laws = ", ".join(f"Điều {a}" for a in _as_list(d.get("law")))
+        parts.append(f"Án {i}: tội danh: {', '.join(_as_list(d.get('crime')))}; điều luật áp dụng: {laws}. "
+                     f"Tóm tắt: {(d.get('description') or '')[:chars]}")
+    return "\n".join(parts)
+
+
+def format_guidance(g, law_nodes: List[str], query_vec, embed: Embed, chars: int) -> str:
+    items, seen = [], set()
+    for n in law_nodes:
+        for it in guidance_items(g, n):
+            key = (it.get("id", ""), it.get("text", ""))
+            if key not in seen:
+                seen.add(key)
+                items.append(it)
+    return pick_guidance(items, query_vec, embed, chars) if items else ""
+
+
+def adjudicator_context(g, mode: str, law_nodes: List[str], case_nodes: List[str], query_vec, embed: Embed, cfg: Dict) -> str:
+    """Sections appended after the candidate articles (empty for "")."""
+    if mode not in ADJUDICATOR_CONTEXTS:
+        raise ValueError(f"adjudicator_context: {mode!r}")
+    out = ""
+    if mode and case_nodes:
+        out += ("\n\nCác án tương tự đã xét xử (chỉ tham khảo, tình tiết có thể khác vụ án đang xét):\n"
+                + format_cases(g, case_nodes, cfg["case_chars"]))
+    if mode == "an+huong-dan":
+        text = format_guidance(g, law_nodes, query_vec, embed, cfg["guidance_chars"])
+        if text:
+            out += "\n\nVăn bản hướng dẫn áp dụng (Công văn, Nghị quyết của Tòa án nhân dân tối cao):\n" + text
+    return out
 
 
 def parse_adjudication(text: str) -> Optional[Dict]:
@@ -150,12 +210,15 @@ def analyze_defendant(g, name: str, description: str, generate: Generate, embed:
 
     # Adjudicator
     if cfg["auditor"] == "bo-qua":  # ablation: candidates only, no Auditor verdicts
-        laws_text = format_laws(g, candidates)
+        shown, shown_cases = candidates, rerank["an"]
+        laws_text = format_laws(g, shown)
     elif cfg["auditor"] == "goi-y":
-        ordered = accepted + [n for n in candidates if n not in accepted]
-        laws_text = format_laws(g, ordered, {n: judgments[n]["ap_dung"] for n in candidates})
+        shown, shown_cases = accepted + [n for n in candidates if n not in accepted], rerank["an"]
+        laws_text = format_laws(g, shown, {n: judgments[n]["ap_dung"] for n in candidates})
     else:
-        laws_text = format_laws(g, accepted)
+        shown, shown_cases = accepted, used_cases  # original: judge_crime_all(law_used, fact_used, ...)
+        laws_text = format_laws(g, shown)
+    laws_text += adjudicator_context(g, cfg["adjudicator_context"], shown, shown_cases, query_vec, embed, cfg)
     raw = generate(JUDGE_CRIME_ALL_PROMPT + JUDGE_CRIME_ALL_INPUT_TEMPLATE.format(law=laws_text, case=case_desc), max_tokens=1024)
     verdict = parse_adjudication(raw)
     label = lambda n: f"{g.node(n)['entry']}{g.node(n).get('suffix', '') or ''}"

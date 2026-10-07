@@ -9,6 +9,7 @@ per judgment (our labels are per judgment).
     python scripts/run_case_pipeline.py --per-crime 2 --tag thu
     python scripts/run_case_pipeline.py                      # all 55 test cases
     python scripts/run_case_pipeline.py --without-graph      # baseline: Adjudicator alone
+    python scripts/run_case_pipeline.py --adjudicator-context an+huong-dan --tag ctx
 
 Writes outputs/case_pipeline_<model>[_tag].json.
 """
@@ -35,6 +36,8 @@ def main() -> None:
     parser.add_argument("--segment", action="store_true", help="With --without-graph: per defendant, as the pipeline.")
     parser.add_argument("--auditor", default="loc", choices=["loc", "goi-y", "bo-qua"],
                         help="loc: original hard filter; goi-y: all candidates, Auditor verdict as a hint; bo-qua: all candidates, no verdicts.")
+    parser.add_argument("--adjudicator-context", default="", choices=["", "an", "an+huong-dan"],
+                        help="Extension: also show the Adjudicator the retrieved cases (an), and the guidance of the shown articles (an+huong-dan).")
     parser.add_argument("--max-defendants", type=int, default=DEFAULTS["max_defendants"])
     parser.add_argument("--tag", default="")
     parser.add_argument("--dotenv-path", default=".env")
@@ -58,6 +61,9 @@ def main() -> None:
             return
         per_def = 1 + 2 + 1 + 2 * 6 + 1  # features, 2 rerank, crimes, judge <=6 articles x2, adjudicate
         est = len(cases) * (1 + 1.6 * (1 + per_def))
+        if args.adjudicator_context:
+            print(f"Adjudicator thêm ngữ cảnh '{args.adjudicator_context}': chỉ ~{len(cases) * 1.6:.0f} lời gọi Adjudicator là mới "
+                  f"(các bước trước dùng lại cache), mỗi lời gọi thêm ~{(2400 + (2000 if 'huong' in args.adjudicator_context else 0)) // 3:,} token")
         print(f"~{est:.0f} lời gọi LLM (giả sử 1,6 bị cáo/án, ≤6 điều ứng viên), ~{est * 3000:,.0f} token đầu vào")
         return
 
@@ -83,7 +89,8 @@ def main() -> None:
         if args.without_graph:
             out = adjudicate_without_graph(client.generate, c["dien_bien"][: DEFAULTS["fact_chars"]], args.segment, args.max_defendants)
         else:
-            out = analyze_case(g, c["dien_bien"], client.generate, embedder.encode_long_text, {"max_defendants": args.max_defendants, "auditor": args.auditor})
+            out = analyze_case(g, c["dien_bien"], client.generate, embedder.encode_long_text, {"max_defendants": args.max_defendants, "auditor": args.auditor,
+                                                                                         "adjudicator_context": args.adjudicator_context})
         s = score_case(out, c["dieu"], c["toi_danh"], crime_articles)
         results.append({"id": c["id"], "dieu": c["dieu"], "toi_danh": c["toi_danh"], "diem": s, **out})
         print(f"[{i}/{len(cases)}] {c['id']} gold {c['dieu']} -> {out['du_doan_dieu']} "

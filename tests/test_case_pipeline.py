@@ -99,3 +99,21 @@ def test_without_graph_segmented_unions_defendants():
     out = adjudicate_without_graph(fake, "a đánh bạc, b tổ chức", segment_defendants=True)
     assert out["du_doan_dieu"] == ["321", "322"] and out["bi_cao"] == ["a", "b"]
     assert adjudicate_without_graph(fake, "x đánh bạc")["du_doan_dieu"] == ["321"]
+
+
+def test_adjudicator_context_shows_cases_and_guidance():
+    from vn_legal_graph.judge.case_pipeline import adjudicator_context
+
+    laws = json.loads(json.dumps(LAWS))
+    laws[0]["items"][0]["related_laws"] = [{"loai": "van_ban_huong_dan", "id": "CV 01/2017 mục 3", "text": "trộm cắp xe máy của người thân"}]
+    g, _ = build_base_graph(laws, [], fake_embed)
+    g.add_node("case:x", "Case", description="lén lút lấy xe máy", crime="['tội trộm cắp tài sản']", law="[173]")
+    cfg = {"case_chars": 800, "guidance_chars": 2000}
+    q = fake_embed("trộm cắp")
+    assert adjudicator_context(g, "", ["law:173"], ["case:x"], q, fake_embed, cfg) == ""
+    only_cases = adjudicator_context(g, "an", ["law:173"], ["case:x"], q, fake_embed, cfg)
+    assert "Án 1: tội danh: tội trộm cắp tài sản; điều luật áp dụng: Điều 173. Tóm tắt: lén lút lấy xe máy" in only_cases
+    assert "hướng dẫn" not in only_cases
+    both = adjudicator_context(g, "an+huong-dan", ["law:173", "law:249"], ["case:x"], q, fake_embed, cfg)
+    assert "CV 01/2017 mục 3: trộm cắp xe máy của người thân" in both
+    assert adjudicator_context(g, "an+huong-dan", ["law:249"], [], q, fake_embed, cfg) == ""
