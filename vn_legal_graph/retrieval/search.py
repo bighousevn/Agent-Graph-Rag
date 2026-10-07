@@ -50,12 +50,16 @@ def laws_from_cases(g: HierarGraph, ranked_cases: Ranked) -> List[int]:
     return out
 
 
+def blhs_laws(g: HierarGraph) -> List[str]:
+    """Law nodes of the penal code. Other codes (BLTTHS, XLVPHC, ND282)
+    reuse article numbers, and these baselines key results by number."""
+    return [n for n in g.nodes_of("Law") if g.node(n).get("bo_luat", "BLHS") == "BLHS"]
+
+
 def direct_laws(g: HierarGraph, query: np.ndarray, top_k: int = 26) -> List[int]:
-    return [g.node(law)["entry"] for law, _ in g.search(query, "Law", top_k=top_k)]
+    return [g.node(law)["entry"] for law, _ in g.search(query, "Law", top_k=top_k, among=blhs_laws(g))]
 
 
 def frequency_prior(g: HierarGraph) -> List[int]:
-    counts = {
-        g.node(law)["entry"]: len(g.predecessors(law, "RELATES_TO_LAW")) for law in g.nodes_of("Law")
-    }
+    counts = {g.node(law)["entry"]: len(g.predecessors(law, "RELATES_TO_LAW")) for law in blhs_laws(g)}
     return [e for e, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]

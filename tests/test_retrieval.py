@@ -63,3 +63,14 @@ def test_evaluate_aggregates():
     assert res["Hit@2"] == 1.0
     assert res["theo_dieu"][249]["R@1"] == pytest.approx(0.5)
     assert res["theo_dieu"][251] == {"R@1": 0.0, "R@2": 1.0, "n": 1}
+
+
+def test_baselines_ignore_other_codes_with_the_same_numbers():
+    from tests.test_graph import LAWS, fake_embed
+    from vn_legal_graph.graph.build import build_base_graph
+    from vn_legal_graph.retrieval.search import direct_laws, frequency_prior
+
+    other = {"id": 249, "suffix": "", "bo_luat": "BLTTHS", "items": [{"text": "Điều 249. ma túy thủ tục", "crime": [], "judge_dep": [], "related_laws": []}]}
+    g, _ = build_base_graph(LAWS + [other], [], fake_embed)
+    assert len([e for e in frequency_prior(g) if e == 249]) == 1
+    assert all(g.node(n)["bo_luat"] == "BLHS" for n in g.nodes_of("Law") if g.node(n)["entry"] in direct_laws(g, fake_embed("ma túy"), top_k=5) and n.count(":") == 1)
