@@ -811,6 +811,42 @@ khoản/điểm (chỉ tính khi luật sư có ghi khoản của điều đó):
 - Kiểm chứng: 160 truy vấn ngẫu nhiên top-1/top-5 giống 160/160, cạnh giống; 40 câu hỏi–đáp qua Neo4j giống bản pkl ở cả truy xuất, judge, câu trả lời và điểm chấm (40/40).
 - Test: `tests/test_neo4j_store.py`; bài chạy với Neo4j thật cần `NEO4J_TEST=1` (xoá dữ liệu trong DB, phải chạy lại `export_neo4j.py` sau đó).
 
+### 11.5. Kho án mọi tội (ViCSR + anle.toaan.gov.vn) và LLM rerank (2026-10-07)
+
+**Vì sao:** ViCSR ~95% là Điều 249 (9.074 án); ngoài ra chỉ 173 (52), 321 (12), các tội khác 1–6 án. Graph cũ có 10 cụm đều "ma túy", nhánh án chỉ trả 247/249/251.
+
+**Nguồn mới:** HuggingFace `tmquan/anle-toaan-gov-vn` (CC-BY-4.0), 459 bản án hình sự (307 phúc thẩm, 111 giám đốc thẩm, 40 sơ thẩm), 2020–2025. File `data/raw/anle/documents.parquet` (gitignore; lệnh tải ghi trong `.gitignore`).
+- `vn_legal_graph/cases/anle.py`:
+  - nhãn = điều tội trích trong **phần quyết định** (dùng `span` trích dẫn có sẵn của dataset, sau "Vì các lẽ trên"/"QUYẾT ĐỊNH:"); trước đó còn lẫn tiền án, tội bị bác;
+  - diễn biến = "nội dung vụ án" đến "nhận định", cắt trước cáo trạng / bản án sơ thẩm / kháng cáo / tuyên án — so trên văn bản đã bỏ hết khoảng trắng vì PDF tách chữ ("cáo tr ạng s ố", "tuyên ố các ị cáo");
+  - che tên tội cả dạng rút gọn ("tội cố ý gây thương tích"). Kiểm tra: 0 án còn tên tội / số điều.
+  - 276 bản ghi, 55 tội.
+- `scripts/build_cases.py --all-crimes --anle ... --corpus-max-per-crime 20 --test-per-crime 5 --test-min-cases 10` (như bài gốc ≤20 án/tội). Bỏ nhãn ViCSR 410 (lỗi khớp 244, mục 8.1).
+- Kết quả: **corpus 291 án / 62 tội** (113 ViCSR, 178 anle), **test 55 án / 11 tội** (123, 173, 174, 175, 247, 249, 250, 251, 321, 322, 341). Trích đặc trưng: 289/291 đọc được; graph có 288 Case (bỏ án không có "hành vi phạm tội" như bài gốc).
+- Cụm: 9 cụm có nghĩa (giết người/thương tích; lừa đảo/tham ô; đánh bạc; tín dụng đen; xuất nhập cảnh trái phép; ma túy; trồng cây có chất ma túy; …).
+- Sửa: `direct_laws`, `frequency_prior` chỉ xét Law BLHS (BLTTHS/XLVPHC/NĐ 282 trùng số điều đã ghi đè số liệu).
+
+**Truy xuất trên 55 án test** (`scripts/evaluate_retrieval.py`, không LLM):
+
+| cách | R@1 | R@3 | Hit@1 | Hit@3 |
+|---|---|---|---|---|
+| tần suất (luôn đoán 249) | 0,17 | 0,38 | 0,25 | 0,49 |
+| án tương tự trực tiếp | **0,51** | **0,78** | **0,65** | **0,82** |
+| qua cụm | 0,45 | 0,70 | 0,58 | 0,75 |
+| so thẳng với điều luật | 0,17 | 0,43 | 0,20 | 0,55 |
+| án tương tự, diễn biến thô | 0,45 | 0,65 | 0,58 | 0,73 |
+
+Yếu: 175, 341 (R@1 0); 321 qua đặc trưng 0,22 nhưng diễn biến thô 0,67.
+
+**LLM rerank** (`pipeline.reranked_cases`, `run_qa_pilot.py --rerank`): port `top_retrieve` + `direct_retrieve` + rerank của bài gốc (top-5 cụm → LLM giữ 2 → án trong cụm + án trực tiếp → LLM giữ ≤3). Prompt `RERANK_*` có sẵn từ trước nhưng chưa dùng.
+
+**Hỏi–đáp 40 câu** (cùng bộ câu): cũ (án ma túy) / án mới / án mới + rerank đều **35 đúng / 4 một phần / 1 sai**.
+- Kho án mới đổi ứng viên ở 16/40 câu, câu trả lời đổi ở 14 câu, nhưng điểm chấm không đổi: mỗi câu ≤8 ứng viên và nhánh án xếp sau cùng, chỉ góp ~0,75 điều/câu.
+- Điều do nhánh án đóng góp đúng với đáp án luật sư: cũ 1/130 (1%, 1 câu); mới 14/341 (4%, 13 câu); mới + rerank **11/97 (11%, 10 câu)**.
+- Kết luận: với câu hỏi tư vấn, kiến thức đến từ điều luật + văn bản hướng dẫn; graph án có tác dụng rõ ở bài toán của bài gốc (dự đoán điều luật từ vụ án: R@1 0,51 so với 0,17).
+
+**Còn lại so với bài gốc:** tách vụ án theo bị cáo; ba agent Researcher / Auditor / Adjudicator (ghi `insights` lên Law); `judge_crime_all` trên tập án test.
+
 ## 10. Tham chiếu
 
 - Sơ đồ tiến độ và kiến trúc truy vấn: <https://claude.ai/artifact/BMLpjNNcp1J9sgwnoyUX11> (artifact riêng của người dùng). Lưu ý: sơ đồ truy vấn trong đó còn thiếu 2 bước đã nêu ở mục 4.2.
