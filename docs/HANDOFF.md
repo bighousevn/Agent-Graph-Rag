@@ -897,10 +897,10 @@ Bài gốc không cho Adjudicator xem án tương tự (`judge_crime_all` bỏ q
 - Văn bản hướng dẫn không giúp thêm (ròng −1 đến −2 án so với chỉ thêm án).
 - Mọi chênh lệch đều 2–5 án trên 55, trong phạm vi nhiễu; vẫn dưới mức không graph. 322 vẫn 0/5.
 
-### 11.8. Chạy Qwen3-8B trên Kaggle/Colab, graph trên Neo4j Aura (2026-10-07, người dùng chọn)
+### 11.8. Chạy Qwen3-8B trên Kaggle/Colab (2026-10-07, người dùng chọn)
 
-Máy người dùng không có GPU NVIDIA (Intel Arc tích hợp), nên Qwen3-8B (mô hình của bài báo) chạy trên GPU Kaggle (Claude chọn: chạy nền 12 giờ, 30 giờ GPU/tuần; Colab vẫn chạy được) qua Ollama (`qwen3:8b-q8_0`, ngữ cảnh 16k); graph đọc từ Neo4j AuraDB Free (`--backend neo4j`).
-- `notebooks/qwen_neo4j.ipynb` (tự nhận Kaggle/Colab; hướng dẫn từng bước ở ô đầu): clone repo (graph pkl, án test, questions.xlsx và cache embedding được commit theo ý người dùng, xem `.gitignore`; dựng lại graph thì commit lại), lấy NEO4J_* từ Secrets, export graph lên Aura, rồi chạy 5 lượt: hỏi–đáp không graph / có graph (187 câu, `--rerank`), vụ án không graph / lọc cứng / bỏ Auditor + án. Chọn lượt bằng `RUNS`. Cache LLM: Kaggle gom thành `cache_llm.tar.gz` trong Output (chạy tiếp: thêm output version trước làm Input), Colab để trên Drive.
+Máy người dùng không có GPU NVIDIA (Intel Arc tích hợp), nên Qwen3-8B (mô hình của bài báo) chạy trên GPU Kaggle (Claude chọn: chạy nền 12 giờ, 30 giờ GPU/tuần; Colab vẫn chạy được) qua Ollama (`qwen3:8b-q8_0`, ngữ cảnh 16k); graph đọc từ `outputs/hierargraph.pkl` (người dùng bỏ Neo4j Aura cho lượt này; `--backend neo4j` vẫn dùng được ở máy).
+- `notebooks/qwen_kaggle.ipynb` (tự nhận Kaggle/Colab; hướng dẫn từng bước ở ô đầu): clone repo (graph pkl, án test, questions.xlsx và cache embedding được commit theo ý người dùng, xem `.gitignore`; dựng lại graph thì commit lại), rồi chạy 5 lượt: hỏi–đáp không graph / có graph (187 câu, `--rerank`), vụ án không graph / lọc cứng / bỏ Auditor + án. Chọn lượt bằng `RUNS`. Cache LLM: Kaggle gom thành `cache_llm.tar.gz` trong Output (chạy tiếp: thêm output version trước làm Input), Colab để trên Drive.
 - Qwen3: `vn_legal_graph/llm.py` thêm "/no_think" vào prompt và bỏ khối `<think>` (như tắt thinking của DeepSeek).
 - Hỏi–đáp: `--without-graph` (prompt `QA_ANSWER_NO_DOCS_PROMPT`, cùng cách chấm), `--no-grade`, `--grade-only FILE`: chấm kết luận sau, ở máy, bằng deepseek, để mọi mô hình trả lời có cùng người chấm.
 - Chưa chạy; chờ người dùng chạy notebook rồi chép kết quả về `outputs/`.
