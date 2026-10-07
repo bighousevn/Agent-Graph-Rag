@@ -42,6 +42,11 @@ DEFAULTS = {
     "fact_chars": 4000,  # the original cuts at 1024 Chinese characters
     "max_defendants": 4,
     "judge_mode": "gop",
+    # "loc": the original hard filter (rejected articles are dropped).
+    # "goi-y": every candidate goes to the Adjudicator with the Auditor's
+    # verdict as a hint (the trial run: judge_law rejected the right article
+    # in 4/22 cases, then the Adjudicator never saw it).
+    "auditor": "loc",
 }
 
 PENALTY_KEYS = ("tu_hinh", "tu_co_thoi_han_thang", "chung_than")
@@ -67,13 +72,17 @@ def is_crime_law(g, law_node: str) -> bool:
     return d.get("bo_luat", "BLHS") == "BLHS" and bool(g.neighbors(law_node, "RELATED_CRIME"))
 
 
-def format_laws(g, law_nodes: List[str]) -> str:
-    """Original format_law: article, the crimes it defines, its text."""
+def format_laws(g, law_nodes: List[str], verdicts: Optional[Dict[str, bool]] = None) -> str:
+    """Original format_law: article, the crimes it defines, its text; with
+    verdicts, the Auditor's result as a hint."""
     parts = []
     for n in law_nodes:
         d = g.node(n)
         crimes = [g.node(c)["description"] for c in g.neighbors(n, "RELATED_CRIME")]
-        parts.append(f"Điều {d['entry']}{d.get('suffix', '') or ''} Bộ luật Hình sự, tội danh: {', '.join(crimes)}. "
+        hint = ""
+        if verdicts is not None:
+            hint = f" (kiểm tra yếu tố cấu thành, chỉ tham khảo: {'thỏa mãn' if verdicts.get(n) else 'không thỏa mãn'})"
+        parts.append(f"Điều {d['entry']}{d.get('suffix', '') or ''} Bộ luật Hình sự{hint}, tội danh: {', '.join(crimes)}. "
                      f"Nội dung: {d['description']}\n---")
     return "\n".join(parts)
 
@@ -139,8 +148,12 @@ def analyze_defendant(g, name: str, description: str, generate: Generate, embed:
     used_cases = filter_facts(g, accepted, rerank["an"])
 
     # Adjudicator
-    raw = generate(JUDGE_CRIME_ALL_PROMPT + JUDGE_CRIME_ALL_INPUT_TEMPLATE.format(law=format_laws(g, accepted), case=case_desc),
-                   max_tokens=1024)
+    if cfg["auditor"] == "goi-y":
+        ordered = accepted + [n for n in candidates if n not in accepted]
+        laws_text = format_laws(g, ordered, {n: judgments[n]["ap_dung"] for n in candidates})
+    else:
+        laws_text = format_laws(g, accepted)
+    raw = generate(JUDGE_CRIME_ALL_PROMPT + JUDGE_CRIME_ALL_INPUT_TEMPLATE.format(law=laws_text, case=case_desc), max_tokens=1024)
     verdict = parse_adjudication(raw)
     label = lambda n: f"{g.node(n)['entry']}{g.node(n).get('suffix', '') or ''}"
     return {

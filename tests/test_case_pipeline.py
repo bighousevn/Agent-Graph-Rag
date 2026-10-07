@@ -73,3 +73,13 @@ def test_analyze_case_researcher_auditor_adjudicator():
     assert out["bi_cao"] == ["nguyễn văn a", "trần văn b"] and len(seen) == 2
     assert out["theo_bi_cao"][0]["auditor"]["chap_nhan"] == ["173"]
     assert set(out["du_doan_dieu"]) == {"173", "249"}
+
+
+def test_auditor_hint_mode_keeps_rejected_articles():
+    from vn_legal_graph.judge.case_pipeline import format_laws
+
+    g, _ = build_base_graph(LAWS, [], fake_embed)
+    text = format_laws(g, ["law:173", "law:249"], {"law:173": True, "law:249": False})
+    assert "Điều 173 Bộ luật Hình sự (kiểm tra yếu tố cấu thành, chỉ tham khảo: thỏa mãn)" in text
+    assert "Điều 249 Bộ luật Hình sự (kiểm tra yếu tố cấu thành, chỉ tham khảo: không thỏa mãn)" in text
+    assert "chỉ tham khảo" not in format_laws(g, ["law:173"])
