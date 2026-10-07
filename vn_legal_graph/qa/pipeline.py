@@ -34,6 +34,7 @@ from ..graph.graph_db import HierarGraph
 from ..judge.judge_law import judge_law, parse_bool
 from ..prompts.vi import (
     JUDGE_LAW_SIMPLE_PROMPT,
+    QA_ANSWER_NO_DOCS_PROMPT,
     QA_ANSWER_PROMPT,
     RERANK_CASES_PROMPT,
     RERANK_CLUSTERS_PROMPT,
@@ -327,6 +328,20 @@ def answer_question(
         "judge": {law_label(g, n): v for n, v in judgments.items()},
         "dieu_dung_de_tra_loi": [law_label(g, n) for n in used],
         "khong_dieu_nao_duoc_chap_nhan": fallback,
+        "tra_loi": answer or {"cau_tra_loi": "", "toi_danh": [], "dieu_luat": []},
+        "tra_loi_loi": answer is None,
+        "tra_loi_tho": raw if answer is None else None,
+    }
+
+
+def answer_without_graph(question: str, generate: Generate) -> Dict:
+    """Baseline: the LLM answers from its own knowledge, same JSON format,
+    so the same scoring applies."""
+    raw = generate(QA_ANSWER_NO_DOCS_PROMPT.format(question=question), max_tokens=1024)
+    answer = parse_answer(raw)
+    return {
+        "truy_xuat": {"ung_vien": []},
+        "dieu_dung_de_tra_loi": [],
         "tra_loi": answer or {"cau_tra_loi": "", "toi_danh": [], "dieu_luat": []},
         "tra_loi_loi": answer is None,
         "tra_loi_tho": raw if answer is None else None,

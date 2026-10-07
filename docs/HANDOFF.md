@@ -897,6 +897,14 @@ Bài gốc không cho Adjudicator xem án tương tự (`judge_crime_all` bỏ q
 - Văn bản hướng dẫn không giúp thêm (ròng −1 đến −2 án so với chỉ thêm án).
 - Mọi chênh lệch đều 2–5 án trên 55, trong phạm vi nhiễu; vẫn dưới mức không graph. 322 vẫn 0/5.
 
+### 11.8. Chạy Qwen3-8B trên Colab, graph trên Neo4j Aura (2026-10-07, người dùng chọn)
+
+Máy người dùng không có GPU NVIDIA (Intel Arc tích hợp), nên Qwen3-8B (mô hình của bài báo) chạy trên Colab GPU qua Ollama (`qwen3:8b-q8_0`, ngữ cảnh 16k); graph đọc từ Neo4j AuraDB Free (`--backend neo4j`).
+- `notebooks/colab_qwen_neo4j.ipynb`: clone repo, giải nén `colab_bundle.tar.gz` từ Drive (`scripts/pack_colab.sh`: graph pkl, án test, questions.xlsx, cache embedding; không có key), lấy NEO4J_* từ Colab Secrets, export graph lên Aura, rồi chạy 5 lượt: hỏi–đáp không graph / có graph (187 câu, `--rerank`), vụ án không graph / lọc cứng / bỏ Auditor + án. Cache LLM để trên Drive nên chạy tiếp được sau khi mất kết nối.
+- Qwen3: `vn_legal_graph/llm.py` thêm "/no_think" vào prompt và bỏ khối `<think>` (như tắt thinking của DeepSeek).
+- Hỏi–đáp: `--without-graph` (prompt `QA_ANSWER_NO_DOCS_PROMPT`, cùng cách chấm), `--no-grade`, `--grade-only FILE`: chấm kết luận sau, ở máy, bằng deepseek, để mọi mô hình trả lời có cùng người chấm.
+- Chưa chạy; chờ người dùng chạy notebook rồi chép kết quả về `outputs/`.
+
 ## 10. Tham chiếu
 
 - Sơ đồ tiến độ và kiến trúc truy vấn: <https://claude.ai/artifact/BMLpjNNcp1J9sgwnoyUX11> (artifact riêng của người dùng). Lưu ý: sơ đồ truy vấn trong đó còn thiếu 2 bước đã nêu ở mục 4.2.

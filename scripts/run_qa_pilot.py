@@ -5,6 +5,8 @@ with the HierarGraph and score them against data/qa/pilot_gold.json.
     python scripts/run_qa_pilot.py --dry-run     # what will run, rough cost; no LLM, no .env
     python scripts/run_qa_pilot.py --n 5
     python scripts/run_qa_pilot.py --auto-gold --n 40 --tag tudong40
+    python scripts/run_qa_pilot.py --auto-gold --n 1000 --without-graph --no-grade   # LLM alone (Colab)
+    python scripts/run_qa_pilot.py --grade-only outputs/qa_llm_only_qwen3_8b-q8_0.json   # grade later
 
 --auto-gold: reference articles come from the lawyer's answer
 (vn_legal_graph/qa/auto_gold.py), not data/qa/pilot_gold.json. Only
@@ -32,7 +34,7 @@ from vn_legal_graph.embedding import CachedEmbedder, embedder_from_config
 from vn_legal_graph.graph.graph_db import HierarGraph
 from vn_legal_graph.prompts.vi import QA_GRADE_PROMPT
 from vn_legal_graph.qa.auto_gold import build_gold, khoan_precision
-from vn_legal_graph.qa.pipeline import DEFAULTS, answer_question
+from vn_legal_graph.qa.pipeline import DEFAULTS, answer_question, answer_without_graph
 from vn_legal_graph.qa.scoring import load_questions, parse_grade, question_text, references_text, score
 
 
@@ -54,8 +56,15 @@ def main() -> None:
     parser.add_argument("--guidance-links", default="data/raw/guidance/guidance_links.json")
     parser.add_argument("--cong-van-tay", default="data/qa/cong_van_tay.json")
     parser.add_argument("--ids-from", default="", help="Re-run the questions of an earlier result file, e.g. outputs/qa_pilot_deepseek-flash_tudong40.json.")
+    parser.add_argument("--without-graph", action="store_true", help="Baseline: the LLM answers alone (no retrieval), same scoring.")
+    parser.add_argument("--no-grade", action="store_true",
+                        help="Skip the LLM grading of conclusions (grade later with --grade-only, by the same grader for every run).")
+    parser.add_argument("--grade-only", default="", help="(Re)grade the conclusions of a result file with the current LLM, in place.")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+
+    if args.grade_only:
+        return grade_file(args)
 
     if args.backend == "neo4j":
         from vn_legal_graph.graph.neo4j_store import Neo4jGraph, connect
@@ -74,10 +83,15 @@ def main() -> None:
     if missing:
         raise SystemExit(f"Thiếu đáp án chuẩn cho: {missing}")
     if args.dry_run:
-        per_q = 1 + 1 + 2 * args.max_candidates + 1 + 1 + (2 if args.rerank else 0)
-        print(f"{len(questions)} câu × tối đa {per_q} lần gọi LLM "
-              f"(đặc trưng, đoán tội, judge ≤{args.max_candidates} điều × 2, trả lời, chấm) "
-              f"= tối đa {len(questions) * per_q} lần gọi, ước ~{len(questions) * 60_000:,} token đầu vào")
+        grade = 0 if args.no_grade else 1
+        if args.without_graph:
+            print(f"{len(questions)} câu × {1 + grade} lần gọi LLM (trả lời{', chấm' if grade else ''}) "
+                  f"= {len(questions) * (1 + grade)} lần gọi, ước ~{len(questions) * (1 + grade) * 1_500:,} token đầu vào")
+        else:
+            per_q = 1 + 1 + 2 * args.max_candidates + 1 + grade + (2 if args.rerank else 0)
+            print(f"{len(questions)} câu × tối đa {per_q} lần gọi LLM "
+                  f"(đặc trưng, đoán tội, judge ≤{args.max_candidates} điều × 2, trả lời{', chấm' if grade else ''}) "
+                  f"= tối đa {len(questions) * per_q} lần gọi, ước ~{len(questions) * 60_000:,} token đầu vào")
         for q in questions:
             print(f"  #{q['qa_number']} [{gold[str(q['qa_number'])].get('nhom', '')}]: {q['title']}")
         return
@@ -96,19 +110,18 @@ def main() -> None:
     for i, q in enumerate(questions, 1):
         qid = str(q["qa_number"])
         print(f"\n[{i}/{len(questions)}] #{qid} {q['title']}")
-        trace = answer_question(g, question_text(q), client.generate, embedder.encode_long_text, run_cfg)
+        if args.without_graph:
+            trace = answer_without_graph(question_text(q), client.generate)
+        else:
+            trace = answer_question(g, question_text(q), client.generate, embedder.encode_long_text, run_cfg)
         pred = trace["tra_loi"]
         s = score(pred, gold[qid])
         if args.auto_gold:
             s["khoan_diem"] = khoan_precision(pred, gold[qid])
-        grade = parse_grade(client.generate(
-            QA_GRADE_PROMPT.format(question=question_text(q), reference=references_text(q["answer"]),
-                                   answer=pred.get("cau_tra_loi", "")),
-            max_tokens=256,
-        ))
+        grade = None if args.no_grade else grade_answer(client, q, pred)
         results.append({"qa_number": qid, "title": q["title"], "diem_tu_dong": s, "cham_ket_luan": grade,
-                        "dap_an_chuan": gold[qid], **trace})
-        print(f"  ứng viên: {trace['truy_xuat']['ung_vien']}")
+                        "cham_boi": None if args.no_grade else client.llm_config.model, "dap_an_chuan": gold[qid], **trace})
+        print(f"  ứng viên: {trace['truy_xuat'].get('ung_vien', [])}")
         print(f"  dùng để trả lời: {trace['dieu_dung_de_tra_loi']}")
         print(f"  trả lời: {pred.get('cau_tra_loi', '')}")
         print(f"  trích: {[(c.get('luat'), c.get('dieu'), c.get('khoan'), c.get('diem')) for c in pred.get('dieu_luat', [])]}")
@@ -116,10 +129,15 @@ def main() -> None:
               f"tội R={s['toi_danh_recall']:.2f} P={s['toi_danh_precision']:.2f} | kết luận={grade and grade['diem']} | {s['so_tu']} từ")
 
     model_slug = re.sub(r"[^\w.-]", "_", client.llm_config.model)
-    out = f"outputs/qa_pilot_{model_slug}{'_' + args.tag if args.tag else ''}.json"
+    out = f"outputs/{'qa_llm_only' if args.without_graph else 'qa_pilot'}_{model_slug}{'_' + args.tag if args.tag else ''}.json"
     with open(out, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
 
+    report_all(results, args)
+    print(f"Đã ghi {out}")
+
+
+def report_all(results, args) -> None:
     report(results, "Tổng", args.auto_gold)
     if args.auto_gold:
         for nhom in ("co_cong_van", "khong_cong_van"):
@@ -127,7 +145,38 @@ def main() -> None:
         report([r for r in results if r["dap_an_chuan"].get("nghi_quyet_trich")], "co_nghi_quyet", True)
         if args.ids_from:
             compare(json.load(open(args.ids_from, encoding="utf-8")), results)
-    print(f"Đã ghi {out}")
+
+
+def grade_answer(client, q, pred):
+    return parse_grade(client.generate(
+        QA_GRADE_PROMPT.format(question=question_text(q), reference=references_text(q["answer"]),
+                               answer=pred.get("cau_tra_loi", "")),
+        max_tokens=256,
+    ))
+
+
+def grade_file(args) -> None:
+    """Grade every answer of a result file (e.g. one written on Colab with
+    --no-grade) with the LLM of .env, so runs of different answering
+    models share one grader."""
+    from vn_legal_graph.config import AppConfig
+    from vn_legal_graph.llm import LLMClient
+
+    results = json.load(open(args.grade_only, encoding="utf-8"))
+    questions = {str(q["qa_number"]): q for q in load_questions(args.questions)}
+    if args.dry_run:
+        print(f"{len(results)} câu cần chấm = {len(results)} lời gọi LLM")
+        return
+    client = LLMClient(AppConfig.from_env_file(args.dotenv_path))
+    print(f"Chấm bằng: {client.llm_config.model}")
+    for r in results:
+        r["cham_ket_luan"] = grade_answer(client, questions[str(r["qa_number"])], r["tra_loi"])
+        r["cham_boi"] = client.llm_config.model
+    with open(args.grade_only, "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
+    args.auto_gold = all("nhom" in r["dap_an_chuan"] for r in results)
+    report_all(results, args)
+    print(f"Đã ghi {args.grade_only}")
 
 
 def report(results, label, auto) -> None:

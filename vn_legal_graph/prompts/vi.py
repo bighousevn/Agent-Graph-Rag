@@ -274,6 +274,32 @@ Các điều luật và tài liệu được cung cấp:
 Trả lời:
 """.strip()
 
+# Baseline: the same answer format, from the LLM's own knowledge (no
+# retrieved documents): rules 4-6 and 9 of QA_ANSWER_PROMPT dropped.
+QA_ANSWER_NO_DOCS_PROMPT = """
+Bạn là luật sư tư vấn pháp luật hình sự Việt Nam. Hãy trả lời câu hỏi dưới đây theo pháp luật Việt Nam hiện hành (Bộ luật Hình sự 2015 sửa đổi, Bộ luật Tố tụng hình sự 2015 và văn bản hướng dẫn).
+
+Yêu cầu:
+1. Xác định hành vi trong tình huống cấu thành tội gì (nếu có) và áp dụng điều, khoản, điểm nào; hoặc, với câu hỏi về thủ tục, quy định nào giải quyết vấn đề.
+2. Nêu rõ căn cứ: tên văn bản và điều, khoản, điểm.
+3. Kết luận dứt khoát khi tình huống đã nêu đủ dữ kiện; chỉ nêu điều kiện ("nếu…") khi thực sự thiếu một dữ kiện quyết định.
+4. Câu đầu tiên của "cau_tra_loi" phải trả lời thẳng câu hỏi: "Có"/"Không", hoặc tên tội và khung (điều, khoản, điểm), hoặc việc phải làm. Các câu sau mới nêu căn cứ và lý do.
+5. Trả lời ngắn gọn, không quá 120 từ, không chép lại nguyên văn điều luật.
+
+Đầu ra là một đối tượng JSON duy nhất, không thêm chữ nào khác:
+{{
+"cau_tra_loi": "câu trả lời ngắn gọn",
+"toi_danh": ["Tội ..."],
+"dieu_luat": [{{"luat": "BLHS" hoặc "BLTTHS" hoặc tên văn bản khác, "dieu": "321", "khoan": "2", "diem": "c"}}]
+}}
+Bỏ trống "khoan"/"diem" ("") nếu không xác định; "toi_danh" là [] nếu câu hỏi không về tội danh.
+
+Câu hỏi:
+{question}
+
+Trả lời:
+""".strip()
+
 # LLM-as-judge for the pilot, compared against the reference answer.
 QA_GRADE_PROMPT = """
 Bạn là giảng viên luật hình sự. Hãy chấm câu trả lời của hệ thống so với đáp án tham khảo của luật sư.

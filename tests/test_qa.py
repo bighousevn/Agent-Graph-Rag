@@ -181,3 +181,20 @@ def test_reranked_cases_follow_llm_order():
     assert out["cum"] == ["cl:giet_nguoi"]
     assert out["an_ung_vien"] == ["case:9", "case:1", "case:2"]
     assert out["an"] == ["case:1", "case:9", "case:2"]
+
+
+def test_answer_without_graph_uses_no_docs_prompt():
+    from vn_legal_graph.qa.pipeline import answer_without_graph
+
+    seen = []
+
+    def fake(prompt, max_tokens=None):
+        seen.append(prompt)
+        return '{"cau_tra_loi": "Có", "toi_danh": ["Tội trộm cắp tài sản"], "dieu_luat": [{"luat": "BLHS", "dieu": "173"}]}'
+
+    out = answer_without_graph("Trộm 3 triệu có bị tù không?", fake)
+    assert len(seen) == 1 and "Các điều luật và tài liệu được cung cấp" not in seen[0]
+    assert "Trộm 3 triệu có bị tù không?" in seen[0]
+    assert out["tra_loi"]["dieu_luat"][0]["dieu"] == "173" and not out["tra_loi_loi"]
+    bad = answer_without_graph("x", lambda p, max_tokens=None: "không phải json")
+    assert bad["tra_loi_loi"] and bad["tra_loi"]["cau_tra_loi"] == ""

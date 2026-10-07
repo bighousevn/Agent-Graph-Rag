@@ -97,3 +97,18 @@ def test_annotate_articles_parallel_keeps_order(tmp_path):
 
     out = annotate_articles(arts, Fake(), workers=3)
     assert [a["judge_dep"] for a in out] == [[], ["Có 2 không?"], ["Có 3 không?"], ["Có 4 không?"]]
+
+
+def test_qwen3_gets_no_think_and_think_block_is_stripped(tmp_path):
+    cfg = AppConfig(llm=LLMConfig(api_key="ollama", model="qwen3:8b-q8_0", provider="ollama"), cache_dir=str(tmp_path))
+    c = LLMClient(cfg)
+    c._client = FakeOpenAI([("<think>\n\n</think>\n\n{\"a\": 1}", "stop")])
+    assert c.generate("p") == '{"a": 1}'
+    assert c._client.calls[0]["messages"][0]["content"] == "p\n/no_think"
+    assert "extra_body" not in c._client.calls[0]
+
+
+def test_other_models_prompt_unchanged(tmp_path):
+    c = client_with(tmp_path, [("ok", "stop")])
+    c.generate("p")
+    assert c._client.calls[0]["messages"][0]["content"] == "p"

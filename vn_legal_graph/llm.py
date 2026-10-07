@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import threading
 import time
 from typing import Optional
@@ -23,6 +24,19 @@ from .config import AppConfig, LLMConfig
 
 class LLMError(RuntimeError):
     pass
+
+
+THINK_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
+
+
+def no_think(model: str, thinking: str) -> bool:
+    """Qwen3 thinks by default; "/no_think" in the message switches it off
+    on any server (Ollama, vLLM), like DeepSeek's thinking flag."""
+    return "qwen3" in model.lower() and thinking != "enabled"
+
+
+def strip_think(text: str) -> str:
+    return THINK_RE.sub("", text).strip()
 
 
 class LLMClient:
@@ -80,6 +94,8 @@ class LLMClient:
 
     def _request_kwargs(self, prompt: str, max_tokens: Optional[int]) -> dict:
         cfg = self.llm_config
+        if no_think(cfg.model, cfg.thinking):
+            prompt = prompt + "\n/no_think"
         kwargs = {
             "model": cfg.model,
             "messages": [{"role": "user", "content": prompt}],
@@ -117,7 +133,7 @@ class LLMClient:
             try:
                 resp = client.chat.completions.create(**self._request_kwargs(prompt, max_tokens))
                 choice = resp.choices[0]
-                text = (choice.message.content or "").strip()
+                text = strip_think(choice.message.content or "")
                 if choice.finish_reason == "length":
                     # Cut off by the token limit: return it (the caller's
                     # parser decides), but never cache it, or a re-run with
