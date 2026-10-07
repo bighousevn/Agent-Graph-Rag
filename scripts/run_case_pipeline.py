@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""The original judgment pipeline on the held-out test cases:
+per defendant Researcher -> Auditor -> Adjudicator
+(vn_legal_graph/judge/case_pipeline.py), scored like the paper
+(evaluation/evaluate_results.py): charge and article accuracy / micro-F1,
+per judgment (our labels are per judgment).
+
+    python scripts/run_case_pipeline.py --dry-run
+    python scripts/run_case_pipeline.py --per-crime 2 --tag thu
+    python scripts/run_case_pipeline.py                      # all 55 test cases
+    python scripts/run_case_pipeline.py --without-graph      # baseline: Adjudicator alone
+
+Writes outputs/case_pipeline_<model>[_tag].json.
+"""
+import argparse
+import collections
+import json
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from vn_legal_graph.graph.graph_db import HierarGraph
+from vn_legal_graph.judge.case_pipeline import DEFAULTS, adjudicate_without_graph, analyze_case, score_case, summarize
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--test", default="data/processed/cases_vn_test.json")
+    parser.add_argument("--graph", default="outputs/hierargraph.pkl")
+    parser.add_argument("--backend", default="pkl", choices=["pkl", "neo4j"])
+    parser.add_argument("--per-crime", type=int, default=None, help="Only N test cases per crime (trial).")
+    parser.add_argument("--without-graph", action="store_true", help="Baseline: Adjudicator without retrieval.")
+    parser.add_argument("--max-defendants", type=int, default=DEFAULTS["max_defendants"])
+    parser.add_argument("--tag", default="")
+    parser.add_argument("--dotenv-path", default=".env")
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
+    cases = json.load(open(args.test, encoding="utf-8"))
+    if args.per_crime:
+        taken, kept = collections.Counter(), []
+        for c in cases:
+            key = str(c["dieu"][0])
+            if taken[key] < args.per_crime:
+                taken[key] += 1
+                kept.append(c)
+        cases = kept
+    print(f"{len(cases)} án test: {dict(collections.Counter(str(c['dieu'][0]) for c in cases))}")
+
+    if args.dry_run:
+        if args.without_graph:
+            print(f"1 lời gọi/án = {len(cases)} lời gọi")
+            return
+        per_def = 1 + 2 + 1 + 2 * 6 + 1  # features, 2 rerank, crimes, judge <=6 articles x2, adjudicate
+        est = len(cases) * (1 + 1.6 * (1 + per_def))
+        print(f"~{est:.0f} lời gọi LLM (giả sử 1,6 bị cáo/án, ≤6 điều ứng viên), ~{est * 3000:,.0f} token đầu vào")
+        return
+
+    from vn_legal_graph.config import AppConfig, EmbeddingConfig
+    from vn_legal_graph.embedding import CachedEmbedder, embedder_from_config
+    from vn_legal_graph.llm import LLMClient
+
+    client = LLMClient(AppConfig.from_env_file(args.dotenv_path))
+    print(f"LLM: {client.llm_config.provider} / {client.llm_config.model}")
+    if args.backend == "neo4j":
+        from vn_legal_graph.graph.neo4j_store import Neo4jGraph, connect
+
+        g = Neo4jGraph(connect())
+    else:
+        g = HierarGraph.load(args.graph)
+    cfg_e = EmbeddingConfig()
+    embedder = CachedEmbedder(embedder_from_config(cfg_e), cfg_e.model_name)
+    crime_articles = {f"{g.node(n)['entry']}{g.node(n).get('suffix', '') or ''}" for n in g.nodes_of("Law")
+                      if g.node(n).get("bo_luat", "BLHS") == "BLHS" and g.neighbors(n, "RELATED_CRIME")}
+
+    results = []
+    for i, c in enumerate(cases, 1):
+        if args.without_graph:
+            out = adjudicate_without_graph(client.generate, c["dien_bien"][: DEFAULTS["fact_chars"]])
+        else:
+            out = analyze_case(g, c["dien_bien"], client.generate, embedder.encode_long_text, {"max_defendants": args.max_defendants})
+        s = score_case(out, c["dieu"], c["toi_danh"], crime_articles)
+        results.append({"id": c["id"], "dieu": c["dieu"], "toi_danh": c["toi_danh"], "diem": s, **out})
+        print(f"[{i}/{len(cases)}] {c['id']} gold {c['dieu']} -> {out['du_doan_dieu']} "
+              f"{'✓' if s['dieu_dung_het'] else '✗'} | bị cáo: {out.get('bi_cao', '-')}")
+
+    model_slug = re.sub(r"[^\w.-]", "_", client.llm_config.model)
+    name = "case_adjudicator_only" if args.without_graph else "case_pipeline"
+    path = f"outputs/{name}_{model_slug}{'_' + args.tag if args.tag else ''}.json"
+    metrics = summarize([r["diem"] for r in results])
+    by_crime = {}
+    for key in sorted({str(r["dieu"][0]) for r in results}, key=lambda x: int(re.match(r"\d+", x).group())):
+        by_crime[key] = summarize([r["diem"] for r in results if str(r["dieu"][0]) == key])
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"metrics": metrics, "theo_toi": by_crime, "cases": results}, f, ensure_ascii=False, indent=2)
+    print(f"\nTổng {metrics['so_an']} án | tội danh: acc {metrics['toi_danh_accuracy']:.2f}, micro-F1 {metrics['toi_danh_micro_f1']:.2f} "
+          f"| điều luật: acc {metrics['dieu_accuracy']:.2f}, micro-F1 {metrics['dieu_micro_f1']:.2f}")
+    for k, m in by_crime.items():
+        print(f"  {k:>4}: {m['so_an']} án | tội acc {m['toi_danh_accuracy']:.2f} | điều acc {m['dieu_accuracy']:.2f}")
+    print(f"Đã ghi {path}")
+
+
+if __name__ == "__main__":
+    main()

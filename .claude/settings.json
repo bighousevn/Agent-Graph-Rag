@@ -5,7 +5,8 @@
       "Bash(.venv/bin/python scripts/summarize_clusters.py*)",
       "Bash(.venv/bin/python scripts/build_law_layer.py*)",
       "Bash(.venv/bin/python scripts/judge_retrieval.py*)",
-      "Bash(.venv/bin/python scripts/run_qa_pilot.py*)"
+      "Bash(.venv/bin/python scripts/run_qa_pilot.py*)",
+      "Bash(.venv/bin/python scripts/run_case_pipeline.py*)"
     ],
     "deny": [
       "Read(./.env)",

@@ -176,6 +176,24 @@ def _apply_rank(items: List, rank: List[int], keep: int) -> List:
     return picked[:keep]
 
 
+def llm_crime_laws(g: HierarGraph, text: str, generate: Generate, embed: Embed) -> Tuple[List[str], List[Dict]]:
+    """The original retrieve_law: the LLM names <=3 crimes, each goes to
+    its nearest Crime node, then back to its Law nodes."""
+    crimes = parse_crime_list(generate(RETRIEVE_LAW_PROMPT.format(fact=text), max_tokens=256))
+    laws: List[str] = []
+    hits = []
+    for name in crimes[:3]:
+        hit = g.search(embed(name), "Crime", top_k=1)
+        if not hit:
+            continue
+        crime_node, sim = hit[0]
+        hits.append({"ten_llm": name, "crime_node": g.node(crime_node)["description"], "cosine": round(sim, 3)})
+        for law in g.predecessors(crime_node, "RELATED_CRIME"):
+            if law not in laws:
+                laws.append(law)
+    return laws, hits
+
+
 def reranked_cases(g: HierarGraph, query_vec, query_text: str, generate: Generate, cfg: Dict) -> Dict:
     """The original top_retrieve + direct_retrieve + rerank."""
     clusters = [c for c, _ in g.search(query_vec, "Cluster", top_k=cfg["rerank_clusters_from"])]
@@ -208,19 +226,7 @@ def retrieve_candidates(
         routes["truc_tiep"] = laws_of_cases(g, direct_cases(g, query_vec, cfg["top_k_cases"]))
         routes["qua_cum"] = laws_of_cases(g, cluster_cases(g, query_vec, cfg["n_clusters"], cfg["top_k_cases"]))
 
-    crimes = parse_crime_list(generate(RETRIEVE_LAW_PROMPT.format(fact=question), max_tokens=256))
-    augment: List[str] = []
-    crime_hits = []
-    for name in crimes[:3]:
-        hit = g.search(embed(name), "Crime", top_k=1)
-        if not hit:
-            continue
-        crime_node, sim = hit[0]
-        crime_hits.append({"ten_llm": name, "crime_node": g.node(crime_node)["description"], "cosine": round(sim, 3)})
-        for law in g.predecessors(crime_node, "RELATED_CRIME"):
-            if law not in augment:
-                augment.append(law)
-    routes["llm_doan_toi"] = augment
+    routes["llm_doan_toi"], crime_hits = llm_crime_laws(g, question, generate, embed)
     question_vec = embed(question)
     routes["van_ban_luat"] = [n for n, _ in g.search(question_vec, "Law", top_k=cfg["top_k_laws_text"])]
     routes["huong_dan"] = guidance_laws(g, question_vec, embed, cfg["top_k_guidance"])

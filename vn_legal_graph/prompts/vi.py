@@ -296,3 +296,75 @@ Câu trả lời của hệ thống:
 
 Chấm:
 """.strip()
+
+
+# ---- Case pipeline (core/utils/util.py::analyze_case) ------------------------
+
+# Added: CAIL gives the defendants' names ("criminals"); Vietnamese
+# judgments do not, so the LLM lists them before CASE_SEG_PROMPT.
+LIST_DEFENDANTS_PROMPT = """
+Bạn là một trợ lý phân tích pháp lý. Hãy liệt kê tên các bị cáo (người bị truy cứu trách nhiệm hình sự) được nhắc trong diễn biến vụ án dưới đây.
+
+Yêu cầu:
+- Chỉ liệt kê bị cáo, không liệt kê bị hại, người làm chứng, người có quyền lợi liên quan.
+- Ghi tên đúng như trong văn bản (có thể là tên viết tắt, ví dụ "nguyễn văn a").
+- Đầu ra là một danh sách dạng Python: ["tên 1", "tên 2"]. Không giải thích.
+- Nếu không xác định được tên, xuất [].
+
+Diễn biến vụ án:
+```
+{fact}
+```
+""".strip()
+
+# Port of core/prompt/preprocess CASE_SEG_PROMPT.
+CASE_SEG_PROMPT = """
+Bạn là một trợ lý phân tích pháp lý chuyên nghiệp. Nhiệm vụ của bạn là dựa trên mô tả vụ án và tên bị cáo dưới đây, sắp xếp lại thành một đoạn mô tả sự việc khách quan về bị cáo đó.
+
+### Đầu vào:
+- Mô tả vụ án: {fact}
+- Tên bị cáo: {name}
+
+### Lưu ý:
+- **Dựa trên nội dung đầu vào**: chỉ sắp xếp từ mô tả vụ án được cung cấp, không thêm thông tin hay giả định bên ngoài.
+- **Khách quan**: mô tả phải hoàn toàn khách quan, không có kết quả xét xử, đánh giá pháp lý hay phân tích chủ quan (như suy đoán động cơ, sắc thái cảm xúc).
+- **Đầy đủ**: kể cả hành vi không do bị cáo trực tiếp thực hiện, nếu có liên quan đến bị cáo (nguyên nhân, hậu quả, bối cảnh, hoặc liên quan trực tiếp đến hành vi của bị cáo) thì vẫn đưa vào để đủ ngữ cảnh.
+- **Định dạng**: xuất thẳng đoạn mô tả đã sắp xếp, ngắn gọn, chính xác, không thêm lời dẫn, tóm tắt hay bình luận.
+- **Trọng tâm**: xoay quanh hành vi, vai trò của bị cáo và các sự kiện liên quan; không nêu các bên không liên quan hay chi tiết phụ, trừ khi có liên hệ rõ ràng với bị cáo.
+
+Hãy xử lý thông tin đầu vào theo các yêu cầu trên.
+""".strip()
+
+# Port of core/prompt/judge JUDGE_CRIME_ALL_PROMPT (Adjudicator) and its input template.
+JUDGE_CRIME_ALL_PROMPT = """
+Bạn là một trợ lý phân tích pháp lý chuyên nghiệp. Hãy dựa trên các điều luật ứng viên để xác định tội danh cho bị cáo, đồng thời dự đoán điều luật áp dụng và mức hình phạt.
+
+Lưu ý:
+- Nếu không cần thiết, đừng kết luận nhiều tội danh mà chọn tội danh phù hợp nhất.
+- Việc chọn tội danh phải theo các bước:
+  1. **Xác định số hành vi**: vụ án có bao nhiêu hành vi phạm tội độc lập. Phân biệt một hành vi vi phạm nhiều điều luật với nhiều hành vi vi phạm các điều luật khác nhau.
+  2. **Áp dụng tội danh cuối cùng**: với mỗi hành vi độc lập, xác định tội danh áp dụng. Một hành vi thỏa mãn nhiều điều luật thì chọn tội nặng hơn hoặc điều luật chuyên biệt hơn; nhiều hành vi độc lập thì áp dụng từng điều luật tương ứng và tổng hợp hình phạt.
+  3. **Dự đoán điều luật và hình phạt**: nêu rõ điều, khoản làm căn cứ, và dự đoán hợp lý mức hình phạt dựa trên tình tiết vụ án, khung hình phạt và thực tiễn xét xử.
+- Tội danh phải có căn cứ pháp luật và gắn chặt với tình tiết vụ án, không suy đoán.
+- Đầu ra phải là **một đối tượng JSON duy nhất**, không thêm chữ nào khác, theo cấu trúc:
+```json
+{{
+    "toi_danh": ["Tội ..."],
+    "dieu_luat": ["Điều 173 khoản 1"],
+    "hinh_phat": {{
+        "tu_hinh": false,
+        "tu_co_thoi_han_thang": 0,
+        "chung_than": false
+    }}
+}}
+```
+""".strip()
+
+JUDGE_CRIME_ALL_INPUT_TEMPLATE = """
+
+Các điều luật ứng viên:
+{law}
+
+Vụ án:
+{case}
+""".rstrip()
