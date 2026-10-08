@@ -100,7 +100,7 @@ def test_annotate_articles_parallel_keeps_order(tmp_path):
 
 
 def test_qwen3_gets_no_think_and_think_block_is_stripped(tmp_path):
-    cfg = AppConfig(llm=LLMConfig(api_key="ollama", model="qwen3:8b-q8_0", provider="ollama"), cache_dir=str(tmp_path))
+    cfg = AppConfig(llm=LLMConfig(api_key="ollama", model="Qwen/Qwen3-8B", provider="openai"), cache_dir=str(tmp_path))  # e.g. vLLM
     c = LLMClient(cfg)
     c._client = FakeOpenAI([("<think>\n\n</think>\n\n{\"a\": 1}", "stop")])
     assert c.generate("p") == '{"a": 1}'
@@ -112,3 +112,26 @@ def test_other_models_prompt_unchanged(tmp_path):
     c = client_with(tmp_path, [("ok", "stop")])
     c.generate("p")
     assert c._client.calls[0]["messages"][0]["content"] == "p"
+
+
+def test_ollama_uses_native_chat_without_thinking(tmp_path, monkeypatch):
+    import requests
+
+    sent = []
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"message": {"content": "<think>\n\n</think>\n\ntrue"}, "done_reason": "stop"}
+
+    monkeypatch.setattr(requests, "post", lambda url, json, timeout: sent.append((url, json)) or Resp())
+    cfg = AppConfig(llm=LLMConfig(api_key="ollama", model="qwen3:8b-q8_0", provider="ollama",
+                                  base_url="http://localhost:11434/v1"), cache_dir=str(tmp_path))
+    c = LLMClient(cfg)
+    assert c.generate("p", max_tokens=16) == "true"
+    url, body = sent[0]
+    assert url == "http://localhost:11434/api/chat" and body["think"] is False and body["stream"] is False
+    assert body["messages"][0]["content"] == "p" and body["options"]["num_predict"] == 128
+    assert c.generate("p", max_tokens=16) == "true" and len(sent) == 1  # cached

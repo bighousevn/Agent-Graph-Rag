@@ -84,6 +84,9 @@ def main() -> None:
     crime_articles = {f"{g.node(n)['entry']}{g.node(n).get('suffix', '') or ''}" for n in g.nodes_of("Law")
                       if g.node(n).get("bo_luat", "BLHS") == "BLHS" and g.neighbors(n, "RELATED_CRIME")}
 
+    model_slug = re.sub(r"[^\w.-]", "_", client.llm_config.model)
+    name = ("case_adjudicator_only" + ("_segment" if args.segment else "")) if args.without_graph else "case_pipeline"
+    path = f"outputs/{name}_{model_slug}{'_' + args.tag if args.tag else ''}.json"
     results = []
     for i, c in enumerate(cases, 1):
         if args.without_graph:
@@ -94,22 +97,26 @@ def main() -> None:
         s = score_case(out, c["dieu"], c["toi_danh"], crime_articles)
         results.append({"id": c["id"], "dieu": c["dieu"], "toi_danh": c["toi_danh"], "diem": s, **out})
         print(f"[{i}/{len(cases)}] {c['id']} gold {c['dieu']} -> {out['du_doan_dieu']} "
-              f"{'✓' if s['dieu_dung_het'] else '✗'} | bị cáo: {out.get('bi_cao', '-')}")
+              f"{'✓' if s['dieu_dung_het'] else '✗'} | bị cáo: {out.get('bi_cao', '-')}", flush=True)
+        write_json(path, {"metrics": summarize([r["diem"] for r in results]), "chua_xong": i < len(cases), "cases": results})
 
-    model_slug = re.sub(r"[^\w.-]", "_", client.llm_config.model)
-    name = ("case_adjudicator_only" + ("_segment" if args.segment else "")) if args.without_graph else "case_pipeline"
-    path = f"outputs/{name}_{model_slug}{'_' + args.tag if args.tag else ''}.json"
     metrics = summarize([r["diem"] for r in results])
     by_crime = {}
     for key in sorted({str(r["dieu"][0]) for r in results}, key=lambda x: int(re.match(r"\d+", x).group())):
         by_crime[key] = summarize([r["diem"] for r in results if str(r["dieu"][0]) == key])
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump({"metrics": metrics, "theo_toi": by_crime, "cases": results}, f, ensure_ascii=False, indent=2)
+    write_json(path, {"metrics": metrics, "theo_toi": by_crime, "cases": results})
     print(f"\nTổng {metrics['so_an']} án | tội danh: acc {metrics['toi_danh_accuracy']:.2f}, micro-F1 {metrics['toi_danh_micro_f1']:.2f} "
           f"| điều luật: acc {metrics['dieu_accuracy']:.2f}, micro-F1 {metrics['dieu_micro_f1']:.2f}")
     for k, m in by_crime.items():
         print(f"  {k:>4}: {m['so_an']} án | tội acc {m['toi_danh_accuracy']:.2f} | điều acc {m['dieu_accuracy']:.2f}")
     print(f"Đã ghi {path}")
+
+
+def write_json(path, data) -> None:
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
 
 
 if __name__ == "__main__":

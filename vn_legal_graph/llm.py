@@ -39,6 +39,14 @@ def strip_think(text: str) -> str:
     return THINK_RE.sub("", text).strip()
 
 
+# Ollama: the native /api/chat with "think": false. Through the OpenAI
+# endpoint "/no_think" was not enough (Kaggle run 2026-10-08: 1,028 of the
+# true/false judge calls hit their 16-token limit while the model thought).
+# Short limits get a floor so a stray prefix does not cut the answer; the
+# cache key keeps the caller's limit.
+OLLAMA_MIN_PREDICT = 128
+
+
 class LLMClient:
     def __init__(self, config: Optional[AppConfig] = None):
         self.config = config or AppConfig.from_env_file()
@@ -82,6 +90,8 @@ class LLMClient:
             fields["max_tokens"] = max_tokens
         if self.llm_config.provider == "deepseek" and self.llm_config.thinking == "enabled":
             fields["thinking"] = "enabled"
+        if self.llm_config.provider == "ollama":
+            fields["ollama_native"] = True  # not the /v1 answers of the first Kaggle run
         key = json.dumps(
             fields,
             ensure_ascii=False,
@@ -113,6 +123,25 @@ class LLMClient:
         kwargs["temperature"] = cfg.temperature
         return kwargs
 
+    def _ollama_chat(self, prompt: str, max_tokens: Optional[int]):
+        """(text, truncated) from Ollama's native /api/chat."""
+        import requests
+
+        cfg = self.llm_config
+        limit = max_tokens or cfg.max_tokens
+        body = {
+            "model": cfg.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "think": cfg.thinking == "enabled",
+            "options": {"temperature": cfg.temperature, "num_predict": max(limit, OLLAMA_MIN_PREDICT)},
+        }
+        url = re.sub(r"/v1/?$", "", cfg.base_url.rstrip("/")) + "/api/chat"
+        resp = requests.post(url, json=body, timeout=cfg.timeout)
+        resp.raise_for_status()
+        data = resp.json()
+        return strip_think(data["message"].get("content") or ""), data.get("done_reason") == "length"
+
     def generate(
         self,
         prompt: str,
@@ -127,14 +156,18 @@ class LLMClient:
             with open(cache_path, "r", encoding="utf-8") as f:
                 return json.load(f)["response"]
 
-        client = self._get_client()
+        client = None if self.llm_config.provider == "ollama" else self._get_client()
         last_error: Optional[Exception] = None
         for attempt in range(1, retries + 1):
             try:
-                resp = client.chat.completions.create(**self._request_kwargs(prompt, max_tokens))
-                choice = resp.choices[0]
-                text = strip_think(choice.message.content or "")
-                if choice.finish_reason == "length":
+                if client is None:
+                    text, truncated = self._ollama_chat(prompt, max_tokens)
+                else:
+                    resp = client.chat.completions.create(**self._request_kwargs(prompt, max_tokens))
+                    choice = resp.choices[0]
+                    text = strip_think(choice.message.content or "")
+                    truncated = choice.finish_reason == "length"
+                if truncated:
                     # Cut off by the token limit: return it (the caller's
                     # parser decides), but never cache it, or a re-run with
                     # a larger limit would get the truncated answer back.

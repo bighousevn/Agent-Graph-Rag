@@ -903,7 +903,8 @@ Máy người dùng không có GPU NVIDIA (Intel Arc tích hợp), nên Qwen3-8B
 - `notebooks/qwen_kaggle.ipynb` (tự nhận Kaggle/Colab; hướng dẫn từng bước ở ô đầu): clone repo (graph pkl, án test, questions.xlsx và cache embedding được commit theo ý người dùng, xem `.gitignore`; dựng lại graph thì commit lại), rồi chạy 5 lượt: hỏi–đáp không graph / có graph (187 câu, `--rerank`), vụ án không graph / lọc cứng / bỏ Auditor + án. Chọn lượt bằng `RUNS`. Cache LLM: Kaggle gom thành `cache_llm.tar.gz` trong Output (chạy tiếp: thêm output version trước làm Input), Colab để trên Drive.
 - Qwen3: `vn_legal_graph/llm.py` thêm "/no_think" vào prompt và bỏ khối `<think>` (như tắt thinking của DeepSeek).
 - Hỏi–đáp: `--without-graph` (prompt `QA_ANSWER_NO_DOCS_PROMPT`, cùng cách chấm), `--no-grade`, `--grade-only FILE`: chấm kết luận sau, ở máy, bằng deepseek, để mọi mô hình trả lời có cùng người chấm.
-- Chưa chạy; chờ người dùng chạy notebook rồi chép kết quả về `outputs/`.
+- **Lần chạy Kaggle 1 (2026-10-07→08, 12 giờ, bị cắt):** GPU T4 có dùng (ollama.log), nhưng qua cổng OpenAI `/no_think` không tắt được suy nghĩ: lượt 2 có 1.681 lời gọi bị cắt vì hết token (1.028 lời judge true/false giới hạn 16), trả lời rỗng; 2.446 lời gọi, trung bình 17,6 s. Lượt 1 xong (187 câu; Qwen không graph: điều recall 0,17, precision 0,22, trả lời TB 6 từ, hay chép ví dụ "321 khoản 2 điểm c" trong prompt); lượt 2 được 132/187.
+- Sửa: Ollama gọi `/api/chat` với `"think": false` (`num_predict` tối thiểu 128; khoá cache có `ollama_native` nên không dùng lại cache lần 1); kết quả ghi sau mỗi câu/án; notebook chạy 2 server Ollama trên 2 GPU (lượt 2 một GPU, lượt 1,3,4,5 GPU kia), lưu 15 phút/lần, dừng ngay nếu lời gọi thử còn suy nghĩ.
 
 ## 10. Tham chiếu
 

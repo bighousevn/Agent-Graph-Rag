@@ -106,6 +106,8 @@ def main() -> None:
     run_cfg = {"judge_mode": args.judge_mode, "max_candidates": args.max_candidates,
                "loc_theo_judge": args.loc_theo_judge, "rerank": args.rerank}
 
+    model_slug = re.sub(r"[^\w.-]", "_", client.llm_config.model)
+    out = f"outputs/{'qa_llm_only' if args.without_graph else 'qa_pilot'}_{model_slug}{'_' + args.tag if args.tag else ''}.json"
     results = []
     for i, q in enumerate(questions, 1):
         qid = str(q["qa_number"])
@@ -121,6 +123,7 @@ def main() -> None:
         grade = None if args.no_grade else grade_answer(client, q, pred)
         results.append({"qa_number": qid, "title": q["title"], "diem_tu_dong": s, "cham_ket_luan": grade,
                         "cham_boi": None if args.no_grade else client.llm_config.model, "dap_an_chuan": gold[qid], **trace})
+        write_json(out, results)  # after every question: a run cut off (Kaggle 12 h) keeps what it did
         print(f"  ứng viên: {trace['truy_xuat'].get('ung_vien', [])}")
         print(f"  dùng để trả lời: {trace['dieu_dung_de_tra_loi']}")
         print(f"  trả lời: {pred.get('cau_tra_loi', '')}")
@@ -128,13 +131,17 @@ def main() -> None:
         print(f"  điểm: điều R={s['dieu_recall']:.2f} P={s['dieu_precision']:.2f} | khoản/điểm={s['khoan_diem']} | "
               f"tội R={s['toi_danh_recall']:.2f} P={s['toi_danh_precision']:.2f} | kết luận={grade and grade['diem']} | {s['so_tu']} từ")
 
-    model_slug = re.sub(r"[^\w.-]", "_", client.llm_config.model)
-    out = f"outputs/{'qa_llm_only' if args.without_graph else 'qa_pilot'}_{model_slug}{'_' + args.tag if args.tag else ''}.json"
-    with open(out, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
+    write_json(out, results)
 
     report_all(results, args)
     print(f"Đã ghi {out}")
+
+
+def write_json(path, data) -> None:
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
 
 
 def report_all(results, args) -> None:
@@ -172,8 +179,7 @@ def grade_file(args) -> None:
     for r in results:
         r["cham_ket_luan"] = grade_answer(client, questions[str(r["qa_number"])], r["tra_loi"])
         r["cham_boi"] = client.llm_config.model
-    with open(args.grade_only, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
+    write_json(args.grade_only, results)
     args.auto_gold = all("nhom" in r["dap_an_chuan"] for r in results)
     report_all(results, args)
     print(f"Đã ghi {args.grade_only}")
