@@ -905,6 +905,7 @@ Máy người dùng không có GPU NVIDIA (Intel Arc tích hợp), nên Qwen3-8B
 - Hỏi–đáp: `--without-graph` (prompt `QA_ANSWER_NO_DOCS_PROMPT`, cùng cách chấm), `--no-grade`, `--grade-only FILE`: chấm kết luận sau, ở máy, bằng deepseek, để mọi mô hình trả lời có cùng người chấm.
 - **Lần chạy Kaggle 1 (2026-10-07→08, 12 giờ, bị cắt):** GPU T4 có dùng (ollama.log), nhưng qua cổng OpenAI `/no_think` không tắt được suy nghĩ: lượt 2 có 1.681 lời gọi bị cắt vì hết token (1.028 lời judge true/false giới hạn 16), trả lời rỗng; 2.446 lời gọi, trung bình 17,6 s. Lượt 1 xong (187 câu; Qwen không graph: điều recall 0,17, precision 0,22, trả lời TB 6 từ, hay chép ví dụ "321 khoản 2 điểm c" trong prompt); lượt 2 được 132/187.
 - Sửa: Ollama gọi `/api/chat` với `"think": false` (`num_predict` tối thiểu 128; khoá cache có `ollama_native` nên không dùng lại cache lần 1); kết quả ghi sau mỗi câu/án; notebook chạy 2 server Ollama trên 2 GPU (lượt 2 một GPU, lượt 1,3,4,5 GPU kia), lưu 15 phút/lần, dừng ngay nếu lời gọi thử còn suy nghĩ.
+- Chạy song song nhiều notebook (người dùng muốn, 2026-10-09): `--shard K/N` (`vn_legal_graph/shard.py`, phần K lấy mỗi câu thứ N) và `--merge … --merge-out` cho cả `run_qa_pilot.py` và `run_case_pipeline.py`; notebook có `NOTEBOOK = 'A' | 'B' | 'C' | 'TATCA'`: A, B chạy lượt 2 chia 4 phần (mỗi GPU một phần), C chạy lượt 1, 3 (GPU 0) và 4, 5 (GPU 1). Gộp 2 phần của lượt 3 (deepseek, từ cache) ra đúng số của lượt chạy đủ (0,69 / 0,67).
 
 ## 10. Tham chiếu
 

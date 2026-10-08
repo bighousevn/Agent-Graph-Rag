@@ -23,6 +23,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from vn_legal_graph.graph.graph_db import HierarGraph
+from vn_legal_graph.shard import shard_suffix, take_shard
 from vn_legal_graph.judge.case_pipeline import DEFAULTS, adjudicate_without_graph, analyze_case, score_case, summarize
 
 
@@ -40,10 +41,15 @@ def main() -> None:
                         help="Extension: also show the Adjudicator the retrieved cases (an), and the guidance of the shown articles (an+huong-dan).")
     parser.add_argument("--max-defendants", type=int, default=DEFAULTS["max_defendants"])
     parser.add_argument("--tag", default="")
+    parser.add_argument("--shard", default="", help="K/N: only every N-th case from the K-th (several notebooks in parallel).")
+    parser.add_argument("--merge", nargs="+", default=[], help="Join the result files of the shards into --merge-out, rescored.")
+    parser.add_argument("--merge-out", default="")
     parser.add_argument("--dotenv-path", default=".env")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
+    if args.merge:
+        return merge_files(args)
     cases = json.load(open(args.test, encoding="utf-8"))
     if args.per_crime:
         taken, kept = collections.Counter(), []
@@ -53,6 +59,8 @@ def main() -> None:
                 taken[key] += 1
                 kept.append(c)
         cases = kept
+    if args.shard:
+        cases = take_shard(cases, args.shard)
     print(f"{len(cases)} án test: {dict(collections.Counter(str(c['dieu'][0]) for c in cases))}")
 
     if args.dry_run:
@@ -86,7 +94,7 @@ def main() -> None:
 
     model_slug = re.sub(r"[^\w.-]", "_", client.llm_config.model)
     name = ("case_adjudicator_only" + ("_segment" if args.segment else "")) if args.without_graph else "case_pipeline"
-    path = f"outputs/{name}_{model_slug}{'_' + args.tag if args.tag else ''}.json"
+    path = f"outputs/{name}_{model_slug}{'_' + args.tag if args.tag else ''}{shard_suffix(args.shard)}.json"
     results = []
     for i, c in enumerate(cases, 1):
         if args.without_graph:
@@ -100,6 +108,11 @@ def main() -> None:
               f"{'✓' if s['dieu_dung_het'] else '✗'} | bị cáo: {out.get('bi_cao', '-')}", flush=True)
         write_json(path, {"metrics": summarize([r["diem"] for r in results]), "chua_xong": i < len(cases), "cases": results})
 
+    write_report(path, results)
+    print(f"Đã ghi {path}")
+
+
+def write_report(path, results) -> None:
     metrics = summarize([r["diem"] for r in results])
     by_crime = {}
     for key in sorted({str(r["dieu"][0]) for r in results}, key=lambda x: int(re.match(r"\d+", x).group())):
@@ -109,7 +122,23 @@ def main() -> None:
           f"| điều luật: acc {metrics['dieu_accuracy']:.2f}, micro-F1 {metrics['dieu_micro_f1']:.2f}")
     for k, m in by_crime.items():
         print(f"  {k:>4}: {m['so_an']} án | tội acc {m['toi_danh_accuracy']:.2f} | điều acc {m['dieu_accuracy']:.2f}")
-    print(f"Đã ghi {path}")
+
+
+def merge_files(args) -> None:
+    if not args.merge_out:
+        raise SystemExit("--merge cần --merge-out")
+    results, seen = [], set()
+    for p in args.merge:
+        data = json.load(open(p, encoding="utf-8"))
+        if data.get("chua_xong"):
+            print(f"Cảnh báo: {p} chưa chạy xong")
+        for r in data["cases"]:
+            if r["id"] in seen:
+                raise SystemExit(f"Án {r['id']} có ở hai file")
+            seen.add(r["id"])
+            results.append(r)
+    write_report(args.merge_out, results)
+    print(f"Gộp {len(args.merge)} file -> {args.merge_out}")
 
 
 def write_json(path, data) -> None:

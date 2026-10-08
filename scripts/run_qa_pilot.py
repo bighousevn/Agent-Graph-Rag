@@ -35,6 +35,7 @@ from vn_legal_graph.graph.graph_db import HierarGraph
 from vn_legal_graph.prompts.vi import QA_GRADE_PROMPT
 from vn_legal_graph.qa.auto_gold import build_gold, khoan_precision
 from vn_legal_graph.qa.pipeline import DEFAULTS, answer_question, answer_without_graph
+from vn_legal_graph.shard import shard_suffix, take_shard
 from vn_legal_graph.qa.scoring import load_questions, parse_grade, question_text, references_text, score
 
 
@@ -50,6 +51,9 @@ def main() -> None:
     parser.add_argument("--max-candidates", type=int, default=DEFAULTS["max_candidates"])
     parser.add_argument("--dotenv-path", default=".env")
     parser.add_argument("--tag", default="", help="Suffix for the output file, e.g. lan2.")
+    parser.add_argument("--shard", default="", help="K/N: only every N-th question from the K-th (several notebooks in parallel).")
+    parser.add_argument("--merge", nargs="+", default=[], help="Join the result files of the shards into --merge-out, then report.")
+    parser.add_argument("--merge-out", default="")
     parser.add_argument("--loc-theo-judge", action="store_true", help="Original hard filter: answer only from accepted articles.")
     parser.add_argument("--rerank", action="store_true", help="Original LLM rerank of clusters and cases (2 more calls per question).")
     parser.add_argument("--auto-gold", action="store_true", help="Reference articles from the lawyer's answer.")
@@ -65,6 +69,8 @@ def main() -> None:
 
     if args.grade_only:
         return grade_file(args)
+    if args.merge:
+        return merge_files(args)
 
     if args.backend == "neo4j":
         from vn_legal_graph.graph.neo4j_store import Neo4jGraph, connect
@@ -79,6 +85,9 @@ def main() -> None:
     else:
         gold = {g_["qa_number"]: g_ for g_ in json.load(open(args.gold, encoding="utf-8"))["cau_hoi"]}
         questions = load_questions(args.questions)[: args.n]
+    if args.shard:
+        questions = take_shard(questions, args.shard)
+        print(f"Phần {args.shard}: {len(questions)} câu")
     missing = [q["qa_number"] for q in questions if str(q["qa_number"]) not in gold]
     if missing:
         raise SystemExit(f"Thiếu đáp án chuẩn cho: {missing}")
@@ -107,7 +116,7 @@ def main() -> None:
                "loc_theo_judge": args.loc_theo_judge, "rerank": args.rerank}
 
     model_slug = re.sub(r"[^\w.-]", "_", client.llm_config.model)
-    out = f"outputs/{'qa_llm_only' if args.without_graph else 'qa_pilot'}_{model_slug}{'_' + args.tag if args.tag else ''}.json"
+    out = f"outputs/{'qa_llm_only' if args.without_graph else 'qa_pilot'}_{model_slug}{'_' + args.tag if args.tag else ''}{shard_suffix(args.shard)}.json"
     results = []
     for i, q in enumerate(questions, 1):
         qid = str(q["qa_number"])
@@ -152,6 +161,22 @@ def report_all(results, args) -> None:
         report([r for r in results if r["dap_an_chuan"].get("nghi_quyet_trich")], "co_nghi_quyet", True)
         if args.ids_from:
             compare(json.load(open(args.ids_from, encoding="utf-8")), results)
+
+
+def merge_files(args) -> None:
+    if not args.merge_out:
+        raise SystemExit("--merge cần --merge-out")
+    results, seen = [], set()
+    for path in args.merge:
+        for r in json.load(open(path, encoding="utf-8")):
+            if r["qa_number"] in seen:
+                raise SystemExit(f"Câu #{r['qa_number']} có ở hai file")
+            seen.add(r["qa_number"])
+            results.append(r)
+    write_json(args.merge_out, results)
+    args.auto_gold = all("nhom" in r["dap_an_chuan"] for r in results)
+    report_all(results, args)
+    print(f"Gộp {len(args.merge)} file, {len(results)} câu -> {args.merge_out}")
 
 
 def grade_answer(client, q, pred):
