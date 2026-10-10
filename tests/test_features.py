@@ -141,3 +141,11 @@ def test_annotate_applies_sanitize():
         use_crime_hint=False,
     )
     assert out[0]["dac_trung"]["defendant_info"] == ["có tiền án"]
+
+
+def test_sanitize_drops_copied_template_slots():
+    from vn_legal_graph.cases.features import sanitize_features
+
+    out = sanitize_features({"criminal_acts": ["<hành vi, phương thức>", "...", "trộm cắp"],
+                             "victim_property_details": ["tài sản trị giá <số tiền trong văn bản> đồng", "xe mô tô"]})
+    assert out["criminal_acts"] == ["trộm cắp"] and out["victim_property_details"] == ["xe mô tô"]

@@ -15,8 +15,9 @@ Vietnamese case: per defendant, Researcher -> Auditor -> Adjudicator.
        are passed along but not shown to the LLM (judge_crime_all ignores
        its retrieved_facts argument).
 
-Extension (not in the original), adjudicator_context: "an" also shows the
-Adjudicator the retrieved cases it would pass (features, crimes, articles);
+adjudicator_context "an" (default, as the paper's eq. 12; the released
+code drops them) also shows the Adjudicator the retrieved cases it passes
+(features, crimes, articles); "" is the released code;
 "an+huong-dan" adds the guidance units (Công văn, Nghị quyết) attached to
 the articles it shows, the closest to the defendant's features first.
 
@@ -47,7 +48,10 @@ DEFAULTS = {
     **QA_DEFAULTS,
     "fact_chars": 4000,  # the original cuts at 1024 Chinese characters
     "max_defendants": 4,
-    "judge_mode": "gop",
+    # Item-wise checklist verification, as the paper (Algorithm 1: one
+    # CheckCondition per diagnostic item, then Decide). "gop" (all items in
+    # one call) was the default while runs were paid per call.
+    "judge_mode": "trung-thanh",
     # "loc": the original hard filter (rejected articles are dropped).
     # "goi-y": every candidate goes to the Adjudicator with the Auditor's
     # verdict as a hint (the trial run: judge_law rejected the right article
@@ -56,7 +60,12 @@ DEFAULTS = {
     "auditor": "loc",
     # "": as the original (articles only); "an": plus the retrieved cases;
     # "an+huong-dan": plus the guidance attached to the shown articles.
-    "adjudicator_context": "",
+    # The paper's Adjudicator gets the verified articles, cases and charges
+    # (eq. 12: q ⊕ A^f ⊕ C^f ⊕ O^f); the released code drops the cases.
+    "adjudicator_context": "an",
+    # Per defendant (LIST_DEFENDANTS + CASE_SEG, as the original); False:
+    # the whole judgment as one query (our labels are per judgment).
+    "segment": True,
     "case_chars": 800,
     "guidance_chars": 2000,
 }
@@ -239,7 +248,7 @@ def analyze_defendant(g, name: str, description: str, generate: Generate, embed:
 def analyze_case(g, fact: str, generate: Generate, embed: Embed, cfg: Optional[Dict] = None) -> Dict:
     cfg = {**DEFAULTS, **(cfg or {})}
     fact = fact[: cfg["fact_chars"]]
-    names = list_defendants(generate, fact, cfg["max_defendants"])
+    names = list_defendants(generate, fact, cfg["max_defendants"]) if cfg["segment"] else []
     if names:
         parts = [(n, segment(generate, fact, n)) for n in names]
     else:

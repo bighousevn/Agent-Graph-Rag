@@ -37,8 +37,11 @@ def main() -> None:
     parser.add_argument("--segment", action="store_true", help="With --without-graph: per defendant, as the pipeline.")
     parser.add_argument("--auditor", default="loc", choices=["loc", "goi-y", "bo-qua"],
                         help="loc: original hard filter; goi-y: all candidates, Auditor verdict as a hint; bo-qua: all candidates, no verdicts.")
-    parser.add_argument("--adjudicator-context", default="", choices=["", "an", "an+huong-dan"],
-                        help="Extension: also show the Adjudicator the retrieved cases (an), and the guidance of the shown articles (an+huong-dan).")
+    parser.add_argument("--adjudicator-context", default=DEFAULTS["adjudicator_context"], choices=["", "an", "an+huong-dan"],
+                        help="an (default, the paper's eq. 12): the Adjudicator also sees the retrieved cases; '': articles only, as the released code; an+huong-dan: plus guidance.")
+    parser.add_argument("--judge-mode", default=DEFAULTS["judge_mode"], choices=["trung-thanh", "gop"],
+                        help="trung-thanh (default, the paper): one call per checklist item; gop: all items in one call.")
+    parser.add_argument("--no-segment", action="store_true", help="The whole judgment as one query, no per-defendant split.")
     parser.add_argument("--max-defendants", type=int, default=DEFAULTS["max_defendants"])
     parser.add_argument("--tag", default="")
     parser.add_argument("--shard", default="", help="K/N: only every N-th case from the K-th (several notebooks in parallel).")
@@ -67,12 +70,12 @@ def main() -> None:
         if args.without_graph:
             print(f"1 lời gọi/án = {len(cases)} lời gọi")
             return
-        per_def = 1 + 2 + 1 + 2 * 6 + 1  # features, 2 rerank, crimes, judge <=6 articles x2, adjudicate
-        est = len(cases) * (1 + 1.6 * (1 + per_def))
-        if args.adjudicator_context:
-            print(f"Adjudicator thêm ngữ cảnh '{args.adjudicator_context}': chỉ ~{len(cases) * 1.6:.0f} lời gọi Adjudicator là mới "
-                  f"(các bước trước dùng lại cache), mỗi lời gọi thêm ~{(2400 + (2000 if 'huong' in args.adjudicator_context else 0)) // 3:,} token")
-        print(f"~{est:.0f} lời gọi LLM (giả sử 1,6 bị cáo/án, ≤6 điều ứng viên), ~{est * 3000:,.0f} token đầu vào")
+        judge = 4.3 * (16.7 if args.judge_mode == "trung-thanh" else 2)  # ~4.3 articles, ~15.7 checklist items + decision
+        per_def = 1 + 2 + 1 + judge + 1  # features, 2 rerank, crimes, judge, adjudicate
+        n_def = 1 if args.no_segment else 2.8  # Qwen listed 2.8 defendants per judgment (Kaggle 2026-10-10)
+        est = len(cases) * ((0 if args.no_segment else 1) + n_def * (0 if args.no_segment else 1) + n_def * per_def)
+        print(f"~{est:.0f} lời gọi LLM (giả sử {n_def} bị cáo/án, ~4,3 điều ứng viên, ~15,7 yếu tố/điều, judge {args.judge_mode}), "
+              f"~{est * 3000:,.0f} token đầu vào")
         return
 
     from vn_legal_graph.config import AppConfig, EmbeddingConfig
@@ -101,7 +104,8 @@ def main() -> None:
             out = adjudicate_without_graph(client.generate, c["dien_bien"][: DEFAULTS["fact_chars"]], args.segment, args.max_defendants)
         else:
             out = analyze_case(g, c["dien_bien"], client.generate, embedder.encode_long_text, {"max_defendants": args.max_defendants, "auditor": args.auditor,
-                                                                                         "adjudicator_context": args.adjudicator_context})
+                                                                                         "adjudicator_context": args.adjudicator_context,
+                                                                                         "judge_mode": args.judge_mode, "segment": not args.no_segment})
         s = score_case(out, c["dieu"], c["toi_danh"], crime_articles)
         results.append({"id": c["id"], "dieu": c["dieu"], "toi_danh": c["toi_danh"], "diem": s, **out})
         print(f"[{i}/{len(cases)}] {c['id']} gold {c['dieu']} -> {out['du_doan_dieu']} "

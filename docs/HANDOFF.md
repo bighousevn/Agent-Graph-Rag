@@ -907,6 +907,13 @@ Máy người dùng không có GPU NVIDIA (Intel Arc tích hợp), nên Qwen3-8B
 - Sửa: Ollama gọi `/api/chat` với `"think": false` (`num_predict` tối thiểu 128; khoá cache có `ollama_native` nên không dùng lại cache lần 1); kết quả ghi sau mỗi câu/án; notebook chạy 2 server Ollama trên 2 GPU (lượt 2 một GPU, lượt 1,3,4,5 GPU kia), lưu 15 phút/lần, dừng ngay nếu lời gọi thử còn suy nghĩ.
 - Chạy song song nhiều notebook (người dùng muốn, 2026-10-09): `--shard K/N` (`vn_legal_graph/shard.py`, phần K lấy mỗi câu thứ N) và `--merge … --merge-out` cho cả `run_qa_pilot.py` và `run_case_pipeline.py`; notebook có `NOTEBOOK = 'A' | 'B' | 'C' | 'TATCA'`: A, B chạy lượt 2 chia 4 phần (mỗi GPU một phần), C chạy lượt 1, 3 (GPU 0) và 4, 5 (GPU 1). Gộp 2 phần của lượt 3 (deepseek, từ cache) ra đúng số của lượt chạy đủ (0,69 / 0,67).
 
+### 11.9. Kết quả Kaggle lần 2 và sửa theo bài báo (2026-10-11; từ đây chỉ dùng Qwen3-8B, người dùng chọn)
+
+Kết quả lần 2 (`outputs/kaggle_lan2/`, Qwen3-8B, think tắt): hỏi–đáp điều recall/precision 0,14/0,19 (không graph) → 0,53/0,56 (graph); vụ án tội/điều acc 0,40/0,18 (không graph) → 0,42/0,40 (như code gốc) và 0,40/0,40 (bỏ Auditor + án). Graph đưa điều đúng vào ứng viên ở 49/55 án (43 còn sau Auditor) nhưng Qwen chọn đúng hết 22; 12 án sai vì thừa điều. Qwen gần như chỉ chọn trong danh sách (0–6/200 điều ngoài danh sách).
+- Lỗi prompt: Qwen chép ví dụ: "Điều 173" (24/55 án không graph), "321" (47/187 câu), "9.775.000 đồng" vào đặc trưng (13 lần); trả lời hỏi–đáp một chữ "Có"/"Không" (176/187). Sửa: ví dụ thành chỗ điền `<...>` (đặc trưng, QA_ANSWER(_NO_DOCS), JUDGE_CRIME_ALL), `sanitize_features` bỏ mục chép nguyên chỗ điền, bắt 2-4 câu, Adjudicator chỉ nêu điều quy định tội đã kết luận.
+- Bài báo (ACL 2026, đọc PDF): chỉ có bài đoán bản án (CAIL 568, CMDL 572 án); Qwen3-8B + LegalGraphRAG CAIL tội acc 40,9%, điều acc 47,9% (Qwen3-8B một mình ~28% / 35,9%). Hai chỗ code gốc khác bài báo, nay theo bài báo trong `case_pipeline.DEFAULTS`: Auditor kiểm tra từng yếu tố (`judge_mode trung-thanh`, Algorithm 1) và Adjudicator nhận điều + án + tội danh (`adjudicator_context an`, eq. 12). Hỏi–đáp giữ `gop` (15,7 yếu tố/điều × 8 ứng viên ≈ 23.000 lời gọi cho 187 câu).
+- Thêm `--no-segment` (cả bản án một lần) vì gộp nhiều "bị cáo" (Qwen liệt kê 2,8/án) sinh điều thừa. Notebook: lượt 4 = như bài báo (chia đôi 2 GPU, gộp bằng `--merge`), lượt 5 = như 4 + `--no-segment`; không chấm kết luận bằng LLM.
+
 ## 10. Tham chiếu
 
 - Sơ đồ tiến độ và kiến trúc truy vấn: <https://claude.ai/artifact/BMLpjNNcp1J9sgwnoyUX11> (artifact riêng của người dùng). Lưu ý: sơ đồ truy vấn trong đó còn thiếu 2 bước đã nêu ở mục 4.2.

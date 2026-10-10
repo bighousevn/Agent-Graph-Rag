@@ -57,7 +57,7 @@ def test_analyze_case_researcher_auditor_adjudicator():
             return "[]"
         if "tối đa ba tội danh" in prompt:
             return '["Tội trộm cắp tài sản"]' if "trộm" in prompt else '["Tội tàng trữ trái phép chất ma túy"]'
-        if "Các yếu tố cần xét" in prompt:
+        if "Các yếu tố cần xét" in prompt or "giỏi phân tích khả năng áp dụng" in prompt:
             return '{"1": true}'
         if "Yếu tố thỏa mãn" in prompt:
             return "true"
@@ -117,3 +117,24 @@ def test_adjudicator_context_shows_cases_and_guidance():
     both = adjudicator_context(g, "an+huong-dan", ["law:173", "law:249"], ["case:x"], q, fake_embed, cfg)
     assert "CV 01/2017 mục 3: trộm cắp xe máy của người thân" in both
     assert adjudicator_context(g, "an+huong-dan", ["law:249"], [], q, fake_embed, cfg) == ""
+
+
+def test_no_segment_judges_the_whole_judgment_once():
+    g, _ = build_base_graph(LAWS, [], fake_embed)
+    asked = []
+
+    def fake(prompt, max_tokens=None):
+        assert "liệt kê tên các bị cáo" not in prompt and "sắp xếp lại thành một đoạn mô tả" not in prompt
+        if "Nhân thân bị cáo" in prompt and "Diễn biến vụ án" in prompt:
+            return '{"criminal_acts": ["trộm cắp"]}'
+        if "tối đa ba tội danh" in prompt:
+            return '["Tội trộm cắp tài sản"]'
+        if "điều luật ứng viên" in prompt:
+            asked.append(prompt)
+            return '{"toi_danh": ["Tội trộm cắp tài sản"], "dieu_luat": ["Điều 173"]}'
+        if "nhóm tội phạm" in prompt or "vụ án tương tự" in prompt:
+            return "[]"
+        return "true"
+
+    out = analyze_case(g, "a trộm xe", fake, fake_embed, {"rerank_clusters_from": 0, "segment": False})
+    assert out["bi_cao"] == [] and len(asked) == 1 and out["du_doan_dieu"] == ["173"]

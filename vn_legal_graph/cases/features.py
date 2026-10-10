@@ -78,10 +78,18 @@ _DROP_RES = {
 }
 
 
+_PLACEHOLDER_RE = re.compile(r"<[^>]*>|^\.\.\.$")
+
+
 def sanitize_features(features: Dict[str, List[str]]) -> Dict[str, List[str]]:
+    """Drops the patterns in _DROP_RES, and slots of the output template
+    ("<loại đối tượng/tài sản>", "...") a model copied instead of filling."""
     out = dict(features)
+    for key in FEATURE_KEYS:
+        if key in features:
+            out[key] = [x for x in features[key] if not _PLACEHOLDER_RE.search(str(x).strip())]
     for key, pattern in _DROP_RES.items():
-        out[key] = [x for x in features.get(key, []) if not pattern.search(x)]
+        out[key] = [x for x in out.get(key, []) if not pattern.search(x)]
     return out
 
 

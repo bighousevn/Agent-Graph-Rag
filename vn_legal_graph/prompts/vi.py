@@ -33,7 +33,7 @@ Bạn là một trợ lý AI pháp lý. Nhiệm vụ của bạn là xử lý ph
 Giải thích các nhóm:
 - Nhân thân bị cáo: trích các đặc điểm pháp lý liên quan đến bị cáo, như độ tuổi, tiền án tiền sự, nghề nghiệp; tránh nêu tuổi cụ thể hoặc tên đơn vị công tác cụ thể. Tên bị cáo không quan trọng.
 - Hành vi phạm tội: trích loại hành vi và phương thức phạm tội có ý nghĩa pháp lý; tránh nêu thời gian, địa điểm cụ thể.
-- Đặc điểm đối tượng/tài sản: trích đặc điểm loại của đối tượng hoặc tài sản bị xâm phạm, như tính chất tài sản, loại địa điểm, loại chất ma túy; tránh nêu tên địa danh cụ thể. Giá trị tài sản hoặc khối lượng ma túy ghi đúng con số văn bản nêu, ví dụ "tài sản trị giá 9.775.000 đồng", "heroine khối lượng 0,226 gam"; không tự đặt khoảng.
+- Đặc điểm đối tượng/tài sản: trích đặc điểm loại của đối tượng hoặc tài sản bị xâm phạm, như tính chất tài sản, loại địa điểm, loại chất ma túy; tránh nêu tên địa danh cụ thể. Giá trị tài sản hoặc khối lượng ma túy ghi đúng con số văn bản nêu, theo dạng "tài sản trị giá <số tiền trong văn bản> đồng", "<loại ma túy> khối lượng <số trong văn bản> gam"; không tự đặt khoảng.
 - Lỗi và thái độ: trích mô tả pháp lý về ý thức chủ quan và thái độ ăn năn, như cố ý/vô ý, tự thú, thành khẩn khai báo, khắc phục hậu quả.
 
 Nguyên tắc bắt buộc:
@@ -46,12 +46,12 @@ Yêu cầu định dạng JSON:
 - Mỗi khóa tương ứng một nhóm, giá trị là một mảng chuỗi chứa các từ khóa trích được (nếu nhóm không có từ khóa nào, dùng mảng rỗng []).
 - Tên khóa bắt buộc là: "defendant_info", "criminal_acts", "victim_property_details", "intent_remorse".
 
-Ví dụ đầu ra (chỉ để tham khảo, đầu ra thực tế phải dựa trên nội dung đầu vào):
+Cấu trúc đầu ra (các mục trong <> là chỗ điền từ khóa lấy từ chính vụ án; không chép nguyên các mục này):
 {{
-"defendant_info": ["đã thành niên", "có tiền án", "cán bộ nhà nước"],
-"criminal_acts": ["trộm cắp", "đột nhập nơi ở"],
-"victim_property_details": ["nhà ở tư nhân", "xe mô tô", "tài sản trị giá 9.775.000 đồng"],
-"intent_remorse": ["lỗi cố ý trực tiếp"]
+"defendant_info": ["<đặc điểm nhân thân>", "..."],
+"criminal_acts": ["<hành vi, phương thức>", "..."],
+"victim_property_details": ["<loại đối tượng/tài sản>", "<giá trị hoặc khối lượng nếu văn bản nêu>", "..."],
+"intent_remorse": ["<lỗi, thái độ>", "..."]
 }}
 
 Đảm bảo chỉ xuất ra đối tượng JSON.
@@ -253,17 +253,17 @@ Yêu cầu:
 4. Chỉ trích các điều luật và văn bản có trong phần tài liệu dưới đây; không trích văn bản không được cung cấp.
 5. Nếu có hướng dẫn áp dụng (Công văn) xử lý tình huống tương tự, ưu tiên làm theo hướng dẫn đó.
 6. Kết quả kiểm tra yếu tố cấu thành kèm theo mỗi điều chỉ để tham khảo; nó có thể sai với câu hỏi giả định hoặc hành vi mới ở mức chuẩn bị.
-7. Câu đầu tiên của "cau_tra_loi" phải trả lời thẳng câu hỏi: "Có"/"Không", hoặc tên tội và khung (điều, khoản, điểm), hoặc việc phải làm. Không mở đầu bằng một khả năng mà câu sau lại bác bỏ (ví dụ không viết "Không bị truy cứu theo khoản 2…" rồi kết luận khoản 2). Các câu sau mới nêu căn cứ và lý do.
+7. Câu đầu tiên của "cau_tra_loi" phải trả lời thẳng câu hỏi: "Có"/"Không", hoặc tên tội và khung (điều, khoản, điểm), hoặc việc phải làm. Không mở đầu bằng một khả năng mà câu sau lại bác bỏ (ví dụ không viết "Không bị truy cứu theo khoản 2…" rồi kết luận khoản 2). Các câu sau mới nêu căn cứ và lý do. Không được chỉ trả lời một chữ ("Có", "Không").
 8. Trả lời ngắn gọn, không quá 120 từ, không chép lại nguyên văn điều luật.
 9. Nếu tài liệu được cung cấp không đủ để trả lời, nói rõ là không đủ căn cứ; không bịa điều luật.
 
 Đầu ra là một đối tượng JSON duy nhất, không thêm chữ nào khác:
 {{
-"cau_tra_loi": "câu trả lời ngắn gọn",
-"toi_danh": ["Tội ..."],
-"dieu_luat": [{{"luat": "BLHS" hoặc "BLTTHS" hoặc tên văn bản khác, "dieu": "321", "khoan": "2", "diem": "c"}}]
+"cau_tra_loi": "<2-4 câu: câu đầu trả lời thẳng, các câu sau nêu căn cứ và lý do>",
+"toi_danh": ["<tên tội đầy đủ>"],
+"dieu_luat": [{{"luat": "<BLHS, BLTTHS hoặc tên văn bản khác>", "dieu": "<số điều>", "khoan": "<số khoản>", "diem": "<chữ cái của điểm>"}}]
 }}
-Bỏ trống "khoan"/"diem" ("") nếu không xác định; "toi_danh" là [] nếu câu hỏi không về tội danh.
+Các mục trong <> là chỗ điền, không chép nguyên. Bỏ trống "khoan"/"diem" ("") nếu không xác định; "toi_danh" là [] nếu câu hỏi không về tội danh; "dieu_luat" chỉ gồm các điều thật sự dùng để trả lời.
 
 Câu hỏi:
 {question}
@@ -283,16 +283,16 @@ Yêu cầu:
 1. Xác định hành vi trong tình huống cấu thành tội gì (nếu có) và áp dụng điều, khoản, điểm nào; hoặc, với câu hỏi về thủ tục, quy định nào giải quyết vấn đề.
 2. Nêu rõ căn cứ: tên văn bản và điều, khoản, điểm.
 3. Kết luận dứt khoát khi tình huống đã nêu đủ dữ kiện; chỉ nêu điều kiện ("nếu…") khi thực sự thiếu một dữ kiện quyết định.
-4. Câu đầu tiên của "cau_tra_loi" phải trả lời thẳng câu hỏi: "Có"/"Không", hoặc tên tội và khung (điều, khoản, điểm), hoặc việc phải làm. Các câu sau mới nêu căn cứ và lý do.
+4. Câu đầu tiên của "cau_tra_loi" phải trả lời thẳng câu hỏi: "Có"/"Không", hoặc tên tội và khung (điều, khoản, điểm), hoặc việc phải làm. Các câu sau mới nêu căn cứ và lý do. Không được chỉ trả lời một chữ ("Có", "Không").
 5. Trả lời ngắn gọn, không quá 120 từ, không chép lại nguyên văn điều luật.
 
 Đầu ra là một đối tượng JSON duy nhất, không thêm chữ nào khác:
 {{
-"cau_tra_loi": "câu trả lời ngắn gọn",
-"toi_danh": ["Tội ..."],
-"dieu_luat": [{{"luat": "BLHS" hoặc "BLTTHS" hoặc tên văn bản khác, "dieu": "321", "khoan": "2", "diem": "c"}}]
+"cau_tra_loi": "<2-4 câu: câu đầu trả lời thẳng, các câu sau nêu căn cứ và lý do>",
+"toi_danh": ["<tên tội đầy đủ>"],
+"dieu_luat": [{{"luat": "<BLHS, BLTTHS hoặc tên văn bản khác>", "dieu": "<số điều>", "khoan": "<số khoản>", "diem": "<chữ cái của điểm>"}}]
 }}
-Bỏ trống "khoan"/"diem" ("") nếu không xác định; "toi_danh" là [] nếu câu hỏi không về tội danh.
+Các mục trong <> là chỗ điền, không chép nguyên. Bỏ trống "khoan"/"diem" ("") nếu không xác định; "toi_danh" là [] nếu câu hỏi không về tội danh; "dieu_luat" chỉ gồm các điều thật sự dùng để trả lời.
 
 Câu hỏi:
 {question}
@@ -372,11 +372,12 @@ Lưu ý:
   2. **Áp dụng tội danh cuối cùng**: với mỗi hành vi độc lập, xác định tội danh áp dụng. Một hành vi thỏa mãn nhiều điều luật thì chọn tội nặng hơn hoặc điều luật chuyên biệt hơn; nhiều hành vi độc lập thì áp dụng từng điều luật tương ứng và tổng hợp hình phạt.
   3. **Dự đoán điều luật và hình phạt**: nêu rõ điều, khoản làm căn cứ, và dự đoán hợp lý mức hình phạt dựa trên tình tiết vụ án, khung hình phạt và thực tiễn xét xử.
 - Tội danh phải có căn cứ pháp luật và gắn chặt với tình tiết vụ án, không suy đoán.
+- "dieu_luat" chỉ gồm điều luật quy định tội danh đã kết luận, chọn trong các điều luật ứng viên; không liệt kê điều "có thể áp dụng". Các mục trong <> ở cấu trúc dưới đây là chỗ điền, không chép nguyên.
 - Đầu ra phải là **một đối tượng JSON duy nhất**, không thêm chữ nào khác, theo cấu trúc:
 ```json
 {{
-    "toi_danh": ["Tội ..."],
-    "dieu_luat": ["Điều 173 khoản 1"],
+    "toi_danh": ["<tên tội đầy đủ>"],
+    "dieu_luat": ["Điều <số điều> khoản <số khoản>"],
     "hinh_phat": {{
         "tu_hinh": false,
         "tu_co_thoi_han_thang": 0,
