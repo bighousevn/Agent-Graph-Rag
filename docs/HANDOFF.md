@@ -913,6 +913,7 @@ Kết quả lần 2 (`outputs/kaggle_lan2/`, Qwen3-8B, think tắt): hỏi–đ�
 - Lỗi prompt: Qwen chép ví dụ: "Điều 173" (24/55 án không graph), "321" (47/187 câu), "9.775.000 đồng" vào đặc trưng (13 lần); trả lời hỏi–đáp một chữ "Có"/"Không" (176/187). Sửa: ví dụ thành chỗ điền `<...>` (đặc trưng, QA_ANSWER(_NO_DOCS), JUDGE_CRIME_ALL), `sanitize_features` bỏ mục chép nguyên chỗ điền, bắt 2-4 câu, Adjudicator chỉ nêu điều quy định tội đã kết luận.
 - Bài báo (ACL 2026, đọc PDF): chỉ có bài đoán bản án (CAIL 568, CMDL 572 án); Qwen3-8B + LegalGraphRAG CAIL tội acc 40,9%, điều acc 47,9% (Qwen3-8B một mình ~28% / 35,9%). Hai chỗ code gốc khác bài báo, nay theo bài báo trong `case_pipeline.DEFAULTS`: Auditor kiểm tra từng yếu tố (`judge_mode trung-thanh`, Algorithm 1) và Adjudicator nhận điều + án + tội danh (`adjudicator_context an`, eq. 12). Hỏi–đáp giữ `gop` (15,7 yếu tố/điều × 8 ứng viên ≈ 23.000 lời gọi cho 187 câu).
 - Thêm `--no-segment` (cả bản án một lần) vì gộp nhiều "bị cáo" (Qwen liệt kê 2,8/án) sinh điều thừa. Notebook: lượt 4 = như bài báo (chia đôi 2 GPU, gộp bằng `--merge`), lượt 5 = như 4 + `--no-segment`; không chấm kết luận bằng LLM.
+- Từ 2026-10-11 notebook chỉ chạy các lượt có graph (người dùng chọn): 2 (hỏi–đáp), 4 (như bài báo, chia đôi 2 GPU), 5 (như 4 + `--no-segment`); mốc không graph lấy từ `outputs/kaggle_lan2/`.
 
 ## 10. Tham chiếu
 
