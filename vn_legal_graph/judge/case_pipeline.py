@@ -46,7 +46,11 @@ Embed = Callable[[str], object]
 
 DEFAULTS = {
     **QA_DEFAULTS,
-    "fact_chars": 4000,  # the original cuts at 1024 Chinese characters
+    # Characters of the judgment the LLM reads. The paper's test cases are
+    # under 1,024 Chinese characters; ours average 6,281 Vietnamese ones and
+    # 24/55 passed 4,000 (Qwen then got 1/24 right without the graph, 8/24
+    # with it). 10,000 leaves ~8 cut; Ollama runs with a 24k context.
+    "fact_chars": 10000,
     "max_defendants": 4,
     # Item-wise checklist verification, as the paper (Algorithm 1: one
     # CheckCondition per diagnostic item, then Decide). "gop" (all items in
@@ -196,7 +200,7 @@ def filter_facts(g, accepted: List[str], cases: List[str]) -> List[str]:
 
 
 def analyze_defendant(g, name: str, description: str, generate: Generate, embed: Embed, cfg: Dict) -> Dict:
-    features = parse_features(generate(build_prompt(description)))
+    features = parse_features(generate(build_prompt(description, max_chars=cfg["fact_chars"])))
     features = sanitize_features(features) if features else None
     query_text = concat_feature_description(features) if features else description
     query_vec = embed(query_text)

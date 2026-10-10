@@ -921,6 +921,7 @@ Kết quả lần 2 (`outputs/kaggle_lan2/`, Qwen3-8B, think tắt): hỏi–đ�
 - Tuyến mới `van_de_phap_ly` (`LEGAL_ISSUES_PROMPT`, `llm_issue_laws`): Qwen nêu ≤3 vấn đề pháp lý chung, mỗi vấn đề so với **tên điều** của 579 điều chung (BLHS 1-107 + BLTTHS), lấy 2 điều gần nhất. Thử trên graph thật: 9/10 vấn đề ra đúng điều ở vị trí 1.
 - Các điều này được thêm sau `max_candidates` điều khác, tối đa `general_slots` = 3, để không bị điều tội chiếm chỗ.
 - Trả lời: `cau_tra_loi` bắt buộc gồm kết luận (câu đầy đủ), căn cứ (điều, khoản, điểm và nội dung), phân tích; 80-200 từ. Câu dưới `min_answer_words` = 40 từ được hỏi lại một lần (`QA_ANSWER_TOO_SHORT_NOTE`), giữ câu dài hơn.
+- Đọc diễn biến: `case_pipeline.fact_chars` 4.000 → 10.000 ký tự (cả trích đặc trưng truy vấn và `judge_law.CASE_MAX_CHARS`); 24/55 án test dài hơn 4.000 (không graph đúng 1/24, có graph 8/24). `JUDGE_ELEMENT_PROMPT` đặt vụ án, điều luật, tài liệu bổ trợ trước yếu tố để ~16 lời gọi của một điều dùng chung tiền tố (server giữ cache). Ollama trên Kaggle: ngữ cảnh 24.576 token.
 
 ## 10. Tham chiếu
 

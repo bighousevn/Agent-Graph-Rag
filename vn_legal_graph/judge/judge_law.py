@@ -39,7 +39,7 @@ Generate = Callable[..., str]
 
 MODES = ("trung-thanh", "gop")
 RELATED_MAX_CHARS = 6000
-CASE_MAX_CHARS = 6000
+CASE_MAX_CHARS = 10000  # = case_pipeline fact_chars
 
 
 def parse_bool(text: str) -> Optional[bool]:

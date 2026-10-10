@@ -127,6 +127,10 @@ Hãy xuất ra danh sách số thứ tự vụ án đã sắp xếp lại:
 
 # ---- Phase 4: judge_law (port of core/prompt/judge JUDGE_LAW_PROMPT / 0) ----
 
+# Case, article and guidance come before the element (the original puts the
+# case last): the ~16 calls per article then share one long prefix, which
+# the server can keep cached between calls instead of re-reading up to
+# 10,000 characters of facts each time.
 JUDGE_ELEMENT_PROMPT = """
 Bạn là một trợ lý AI pháp lý chuyên nghiệp, giỏi phân tích khả năng áp dụng của điều luật. Nhiệm vụ của bạn là đánh giá chặt chẽ xem tình tiết vụ án có thỏa mãn yếu tố cấu thành được nêu hay không, dựa trên điều luật, tài liệu bổ trợ, yếu tố cần xét và tình tiết vụ án.
 
@@ -144,10 +148,10 @@ Hướng dẫn phân tích:
 
 Định dạng đầu ra: chỉ trả lời "true" hoặc "false", không thêm bất kỳ chữ nào khác.
 
+Vụ án: {case}
 Điều luật: {law}
 Tài liệu bổ trợ: {related}
 Yếu tố cần xét: {element}
-Vụ án: {case}
 
 Trả lời:
 """.strip()
