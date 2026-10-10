@@ -85,6 +85,8 @@ def test_answer_question_end_to_end_with_fake_llm():
             return '{"criminal_acts": ["đánh bạc qua app"]}'
         if "tối đa ba tội danh" in prompt:
             return '["Tội đánh bạc"]'
+        if "vấn đề pháp lý CHUNG" in prompt:
+            return '["tình tiết giảm nhẹ"]'
         if "Các yếu tố cần xét" in prompt:
             return '{"1": true}'
         if "Yếu tố thỏa mãn" in prompt:
@@ -105,6 +107,8 @@ def test_answer_question_end_to_end_with_fake_llm():
     assert out["dieu_dung_de_tra_loi"][0] == "BLHS Điều 321"  # accepted first, others after
     assert out["tra_loi"]["dieu_luat"][0]["dieu"] == "321"
     assert not out["tra_loi_loi"]
+    assert out["truy_xuat"]["tuyen"]["van_de_phap_ly"][0] == "BLHS Điều 51"
+    assert out["hoi_lai_vi_ngan"]  # "Khoản 2 Điều 321." is asked again
 
 
 def test_hard_filter_option_keeps_original_behaviour():
@@ -193,8 +197,41 @@ def test_answer_without_graph_uses_no_docs_prompt():
         return '{"cau_tra_loi": "Có", "toi_danh": ["Tội trộm cắp tài sản"], "dieu_luat": [{"luat": "BLHS", "dieu": "173"}]}'
 
     out = answer_without_graph("Trộm 3 triệu có bị tù không?", fake)
-    assert len(seen) == 1 and "Các điều luật và tài liệu được cung cấp" not in seen[0]
+    assert len(seen) == 2 and "Các điều luật và tài liệu được cung cấp" not in seen[0]
+    assert "lần trả lời trước chỉ có 1 từ" in seen[1]  # "Có" alone is asked again
     assert "Trộm 3 triệu có bị tù không?" in seen[0]
     assert out["tra_loi"]["dieu_luat"][0]["dieu"] == "173" and not out["tra_loi_loi"]
     bad = answer_without_graph("x", lambda p, max_tokens=None: "không phải json")
     assert bad["tra_loi_loi"] and bad["tra_loi"]["cau_tra_loi"] == ""
+
+
+def test_general_slots_are_added_after_other_candidates():
+    from vn_legal_graph.qa.pipeline import DEFAULTS, retrieve_candidates
+
+    laws = LAWS + [{"id": 65, "suffix": "", "title": "Án treo", "items": [{"text": "Điều 65. Án treo", "crime": [], "judge_dep": [], "related_laws": []}]},
+                   {"id": 173, "suffix": "", "title": "Tội trộm cắp tài sản", "items": [{"text": "Điều 173. Tội trộm cắp tài sản",
+                    "crime": ["Tội trộm cắp tài sản"], "judge_dep": [], "related_laws": []}]}]
+    g, _ = build_base_graph(laws, [], fake_embed)
+
+    def fake(prompt, max_tokens=None):
+        if "tối đa ba tội danh" in prompt:
+            return '["Tội trộm cắp tài sản", "Tội đánh bạc"]'
+        if "vấn đề pháp lý CHUNG" in prompt:
+            return '["án treo", "Tội trộm cắp tài sản"]'
+        return "[]"
+
+    q = "Trộm xe có được hưởng án treo không?"
+    out = retrieve_candidates(g, q, fake_embed(q), fake, fake_embed, {**DEFAULTS, "max_candidates": 2, "laws_per_issue": 1})
+    assert out["ung_vien"][:2] == ["law:173", "law:321"]  # crime articles fill max_candidates
+    assert "law:65" in out["ung_vien"][2:]  # the general article still gets in
+    assert all(n not in ("law:173", "law:321") for n in out["tuyen"]["van_de_phap_ly"])  # only general articles
+
+
+def test_retry_keeps_the_longer_answer():
+    from vn_legal_graph.qa.pipeline import answer_with_retry
+
+    answers = iter(['{"cau_tra_loi": "Có"}', '{"cau_tra_loi": "' + " ".join(["từ"] * 50) + '"}'])
+    raw, ans, retried = answer_with_retry("p", lambda p, max_tokens=None: next(answers), 40)
+    assert retried and len(ans["cau_tra_loi"].split()) == 50
+    _, ans, retried = answer_with_retry("p", lambda p, max_tokens=None: '{"cau_tra_loi": "' + " ".join(["a"] * 45) + '"}', 40)
+    assert not retried

@@ -241,6 +241,27 @@ Tình huống: {case}
 Trả lời:
 """.strip()
 
+# Q&A route for articles no case or crime leads to: the general part of the
+# BLHS (Điều 1-107) and the BLTTHS. The LLM names the legal issues; each is
+# matched to article titles. (Kaggle 2026-10-10: the graph missed 85/127
+# general-part and 27/30 BLTTHS articles the lawyers cited.)
+LEGAL_ISSUES_PROMPT = """
+Bạn là luật sư hình sự. Hãy xác định các vấn đề pháp lý CHUNG mà câu hỏi dưới đây cần giải quyết, ngoài việc xác định tên tội.
+
+Vấn đề pháp lý chung là các nội dung thuộc phần chung Bộ luật Hình sự (như độ tuổi chịu trách nhiệm hình sự, lỗi, phòng vệ chính đáng, đồng phạm, chuẩn bị phạm tội, tình tiết giảm nhẹ, tình tiết tăng nặng, án treo, thời hiệu, miễn trách nhiệm hình sự, án tích) hoặc thủ tục tố tụng hình sự (như khởi tố, tố giác, tạm giữ, tạm giam, quyền của bị can bị cáo hoặc bị hại, thẩm quyền, xét xử, kháng cáo).
+
+Yêu cầu:
+- Chỉ nêu vấn đề mà câu hỏi thật sự cần để trả lời; tối đa ba vấn đề, mỗi vấn đề là một cụm từ ngắn giống tên một điều luật.
+- Không nêu tên tội.
+- Chỉ xuất một danh sách dạng Python, không giải thích. Nếu không có vấn đề chung nào, xuất [].
+
+Câu hỏi:
+```
+{question}
+```
+Danh sách vấn đề:
+""".strip()
+
 # Replaces judge_crime_all for Q&A: the answer, plus crimes and articles in a
 # structure that can be scored.
 QA_ANSWER_PROMPT = """
@@ -253,13 +274,17 @@ Yêu cầu:
 4. Chỉ trích các điều luật và văn bản có trong phần tài liệu dưới đây; không trích văn bản không được cung cấp.
 5. Nếu có hướng dẫn áp dụng (Công văn) xử lý tình huống tương tự, ưu tiên làm theo hướng dẫn đó.
 6. Kết quả kiểm tra yếu tố cấu thành kèm theo mỗi điều chỉ để tham khảo; nó có thể sai với câu hỏi giả định hoặc hành vi mới ở mức chuẩn bị.
-7. Câu đầu tiên của "cau_tra_loi" phải trả lời thẳng câu hỏi: "Có"/"Không", hoặc tên tội và khung (điều, khoản, điểm), hoặc việc phải làm. Không mở đầu bằng một khả năng mà câu sau lại bác bỏ (ví dụ không viết "Không bị truy cứu theo khoản 2…" rồi kết luận khoản 2). Các câu sau mới nêu căn cứ và lý do. Không được chỉ trả lời một chữ ("Có", "Không").
-8. Trả lời ngắn gọn, không quá 120 từ, không chép lại nguyên văn điều luật.
+7. "cau_tra_loi" là một đoạn văn hoàn chỉnh gồm ba phần, theo thứ tự:
+   (a) Kết luận: câu đầu tiên trả lời thẳng câu hỏi bằng một câu đầy đủ (có/không bị xử lý, tội gì và khung nào, hoặc phải làm gì). Không mở đầu bằng một khả năng mà câu sau lại bác bỏ.
+   (b) Căn cứ: nêu tên văn bản và điều, khoản, điểm áp dụng, kèm nội dung chính của quy định đó.
+   (c) Phân tích: đối chiếu tình tiết trong câu hỏi với quy định để giải thích vì sao đi đến kết luận; nêu điều kiện nếu thiếu dữ kiện quyết định.
+   Tuyệt đối không trả lời cụt lủn bằng một chữ hoặc một câu ngắn ("Có", "Không", "Bị phạt tù").
+8. Độ dài khoảng 80-200 từ; không chép lại nguyên văn cả điều luật.
 9. Nếu tài liệu được cung cấp không đủ để trả lời, nói rõ là không đủ căn cứ; không bịa điều luật.
 
 Đầu ra là một đối tượng JSON duy nhất, không thêm chữ nào khác:
 {{
-"cau_tra_loi": "<2-4 câu: câu đầu trả lời thẳng, các câu sau nêu căn cứ và lý do>",
+"cau_tra_loi": "<đoạn văn 80-200 từ: kết luận, căn cứ, phân tích>",
 "toi_danh": ["<tên tội đầy đủ>"],
 "dieu_luat": [{{"luat": "<BLHS, BLTTHS hoặc tên văn bản khác>", "dieu": "<số điều>", "khoan": "<số khoản>", "diem": "<chữ cái của điểm>"}}]
 }}
@@ -283,12 +308,16 @@ Yêu cầu:
 1. Xác định hành vi trong tình huống cấu thành tội gì (nếu có) và áp dụng điều, khoản, điểm nào; hoặc, với câu hỏi về thủ tục, quy định nào giải quyết vấn đề.
 2. Nêu rõ căn cứ: tên văn bản và điều, khoản, điểm.
 3. Kết luận dứt khoát khi tình huống đã nêu đủ dữ kiện; chỉ nêu điều kiện ("nếu…") khi thực sự thiếu một dữ kiện quyết định.
-4. Câu đầu tiên của "cau_tra_loi" phải trả lời thẳng câu hỏi: "Có"/"Không", hoặc tên tội và khung (điều, khoản, điểm), hoặc việc phải làm. Các câu sau mới nêu căn cứ và lý do. Không được chỉ trả lời một chữ ("Có", "Không").
-5. Trả lời ngắn gọn, không quá 120 từ, không chép lại nguyên văn điều luật.
+4. "cau_tra_loi" là một đoạn văn hoàn chỉnh gồm ba phần, theo thứ tự:
+   (a) Kết luận: câu đầu tiên trả lời thẳng câu hỏi bằng một câu đầy đủ (có/không bị xử lý, tội gì và khung nào, hoặc phải làm gì).
+   (b) Căn cứ: nêu tên văn bản và điều, khoản, điểm áp dụng, kèm nội dung chính của quy định đó.
+   (c) Phân tích: đối chiếu tình tiết trong câu hỏi với quy định để giải thích vì sao đi đến kết luận; nêu điều kiện nếu thiếu dữ kiện quyết định.
+   Tuyệt đối không trả lời cụt lủn bằng một chữ hoặc một câu ngắn ("Có", "Không", "Bị phạt tù").
+5. Độ dài khoảng 80-200 từ; không chép lại nguyên văn cả điều luật.
 
 Đầu ra là một đối tượng JSON duy nhất, không thêm chữ nào khác:
 {{
-"cau_tra_loi": "<2-4 câu: câu đầu trả lời thẳng, các câu sau nêu căn cứ và lý do>",
+"cau_tra_loi": "<đoạn văn 80-200 từ: kết luận, căn cứ, phân tích>",
 "toi_danh": ["<tên tội đầy đủ>"],
 "dieu_luat": [{{"luat": "<BLHS, BLTTHS hoặc tên văn bản khác>", "dieu": "<số điều>", "khoan": "<số khoản>", "diem": "<chữ cái của điểm>"}}]
 }}
@@ -394,4 +423,11 @@ Các điều luật ứng viên:
 
 Vụ án:
 {case}
+""".rstrip()
+
+# Second try when the answer came back terse (Qwen3-8B answered "Có" alone
+# to 176/187 questions on 2026-10-10).
+QA_ANSWER_TOO_SHORT_NOTE = """
+
+LƯU Ý: lần trả lời trước chỉ có {n} từ, quá ngắn và không đạt yêu cầu. Hãy trả lời lại theo đúng cấu trúc đã yêu cầu: kết luận bằng câu đầy đủ, căn cứ (điều, khoản, điểm và nội dung quy định), phân tích tình tiết; khoảng 80-200 từ.
 """.rstrip()

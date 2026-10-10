@@ -34,8 +34,10 @@ from ..graph.graph_db import HierarGraph
 from ..judge.judge_law import judge_law, parse_bool
 from ..prompts.vi import (
     JUDGE_LAW_SIMPLE_PROMPT,
+    LEGAL_ISSUES_PROMPT,
     QA_ANSWER_NO_DOCS_PROMPT,
     QA_ANSWER_PROMPT,
+    QA_ANSWER_TOO_SHORT_NOTE,
     RERANK_CASES_PROMPT,
     RERANK_CLUSTERS_PROMPT,
     RETRIEVE_LAW_PROMPT,
@@ -51,6 +53,14 @@ DEFAULTS = {
     "top_k_laws_text": 5,
     "top_k_guidance": 3,
     "max_candidates": 8,
+    # Route "van_de_phap_ly": the LLM names general legal issues, matched to
+    # titles of BLHS general-part (Điều 1-107) and BLTTHS articles; up to
+    # general_slots of them are added after the max_candidates others, so
+    # they are not crowded out by crime articles.
+    "general_slots": 3,
+    "laws_per_issue": 2,
+    # An answer shorter than this (words) is asked again once.
+    "min_answer_words": 40,
     "judge_mode": "gop",
     "law_text_chars": 4000,
     "guidance_chars": 4000,
@@ -177,6 +187,50 @@ def _apply_rank(items: List, rank: List[int], keep: int) -> List:
     return picked[:keep]
 
 
+def is_general_law(d: Dict) -> bool:
+    """BLHS general part (Điều 1-107) or any BLTTHS article."""
+    if d.get("bo_luat") == "BLTTHS":
+        return True
+    entry = str(d.get("entry", ""))
+    return d.get("bo_luat", "BLHS") == "BLHS" and entry.isdigit() and int(entry) <= 107
+
+
+def general_title_index(g: HierarGraph, embed: Embed) -> List[Tuple[str, np.ndarray]]:
+    """(Law node, embedding of its title) for the general articles; titles
+    are short and say what the article is about ("Án treo"), the full text
+    is long. Kept on the graph object."""
+    cached = getattr(g, "_general_title_index", None)
+    if cached is not None:
+        return cached
+    index = []
+    for n in g.nodes_of("Law"):
+        d = g.node(n)
+        if is_general_law(d) and d.get("title"):
+            index.append((n, _unit(embed(d["title"]))))
+    g._general_title_index = index
+    return index
+
+
+def llm_issue_laws(g: HierarGraph, question: str, generate: Generate, embed: Embed, per_issue: int) -> Tuple[List[str], List[Dict]]:
+    """The LLM names <=3 general legal issues; each goes to the general
+    articles whose titles are closest."""
+    issues = parse_crime_list(generate(LEGAL_ISSUES_PROMPT.format(question=question), max_tokens=128))
+    index = general_title_index(g, embed)
+    laws: List[str] = []
+    hits = []
+    for issue in issues[:3]:
+        if not index or not issue.strip():
+            continue
+        q = _unit(embed(issue))
+        ranked = sorted(index, key=lambda x: -float(x[1] @ q))[:per_issue]
+        hits.append({"van_de": issue, "dieu": [law_label(g, n) for n, _ in ranked],
+                     "cosine": [round(float(v @ q), 3) for _, v in ranked]})
+        for n, _ in ranked:
+            if n not in laws:
+                laws.append(n)
+    return laws, hits
+
+
 def llm_crime_laws(g: HierarGraph, text: str, generate: Generate, embed: Embed) -> Tuple[List[str], List[Dict]]:
     """The original retrieve_law: the LLM names <=3 crimes, each goes to
     its nearest Crime node, then back to its Law nodes."""
@@ -231,6 +285,9 @@ def retrieve_candidates(
     question_vec = embed(question)
     routes["van_ban_luat"] = [n for n, _ in g.search(question_vec, "Law", top_k=cfg["top_k_laws_text"])]
     routes["huong_dan"] = guidance_laws(g, question_vec, embed, cfg["top_k_guidance"])
+    issue_hits: List[Dict] = []
+    if cfg["general_slots"]:
+        routes["van_de_phap_ly"], issue_hits = llm_issue_laws(g, question, generate, embed, cfg["laws_per_issue"])
 
     order = ["llm_doan_toi", "huong_dan", "van_ban_luat", "an_tuong_tu", "truc_tiep", "qua_cum"]
     candidates: List[str] = []
@@ -238,11 +295,14 @@ def retrieve_candidates(
         for law in routes.get(r, []):
             if law not in candidates:
                 candidates.append(law)
+    candidates = candidates[: cfg["max_candidates"]]
+    extra = [n for n in routes.get("van_de_phap_ly", []) if n not in candidates][: cfg["general_slots"]]
     return {
         "tuyen": routes,
         "rerank": rerank,
         "llm_toi_danh": crime_hits,
-        "ung_vien": candidates[: cfg["max_candidates"]],
+        "llm_van_de": issue_hits,
+        "ung_vien": candidates + extra,
     }
 
 
@@ -314,13 +374,10 @@ def answer_question(
     else:
         used = accepted + [n for n in retrieval["ung_vien"] if n not in accepted]
 
-    raw = generate(
-        QA_ANSWER_PROMPT.format(
-            question=question, laws=render_laws_for_answer(g, used, cfg, judgments, embed(question), embed)
-        ),
-        max_tokens=1024,
+    prompt = QA_ANSWER_PROMPT.format(
+        question=question, laws=render_laws_for_answer(g, used, cfg, judgments, embed(question), embed)
     )
-    answer = parse_answer(raw)
+    raw, answer, retried = answer_with_retry(prompt, generate, cfg["min_answer_words"])
     return {
         "dac_trung": description,
         "truy_xuat": {**retrieval, "ung_vien": [law_label(g, n) for n in retrieval["ung_vien"]],
@@ -331,14 +388,29 @@ def answer_question(
         "tra_loi": answer or {"cau_tra_loi": "", "toi_danh": [], "dieu_luat": []},
         "tra_loi_loi": answer is None,
         "tra_loi_tho": raw if answer is None else None,
+        "hoi_lai_vi_ngan": retried,
     }
+
+
+def answer_with_retry(prompt: str, generate: Generate, min_words: int):
+    """(raw, parsed answer, retried). A terse answer is asked again once,
+    with a note; the longer of the two is kept."""
+    raw = generate(prompt, max_tokens=1024)
+    answer = parse_answer(raw)
+    n = len((answer or {}).get("cau_tra_loi", "").split())
+    if not min_words or n >= min_words:
+        return raw, answer, False
+    raw2 = generate(prompt + QA_ANSWER_TOO_SHORT_NOTE.format(n=n), max_tokens=1024)
+    answer2 = parse_answer(raw2)
+    if answer2 and len(answer2.get("cau_tra_loi", "").split()) > n:
+        return raw2, answer2, True
+    return raw, answer, True
 
 
 def answer_without_graph(question: str, generate: Generate) -> Dict:
     """Baseline: the LLM answers from its own knowledge, same JSON format,
     so the same scoring applies."""
-    raw = generate(QA_ANSWER_NO_DOCS_PROMPT.format(question=question), max_tokens=1024)
-    answer = parse_answer(raw)
+    raw, answer, _ = answer_with_retry(QA_ANSWER_NO_DOCS_PROMPT.format(question=question), generate, DEFAULTS["min_answer_words"])
     return {
         "truy_xuat": {"ung_vien": []},
         "dieu_dung_de_tra_loi": [],

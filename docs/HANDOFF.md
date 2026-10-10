@@ -915,6 +915,13 @@ Kết quả lần 2 (`outputs/kaggle_lan2/`, Qwen3-8B, think tắt): hỏi–đ�
 - Thêm `--no-segment` (cả bản án một lần) vì gộp nhiều "bị cáo" (Qwen liệt kê 2,8/án) sinh điều thừa. Notebook: lượt 4 = như bài báo (chia đôi 2 GPU, gộp bằng `--merge`), lượt 5 = như 4 + `--no-segment`; không chấm kết luận bằng LLM.
 - Từ 2026-10-11 notebook chỉ chạy các lượt có graph (người dùng chọn): 2 (hỏi–đáp), 4 (như bài báo, chia đôi 2 GPU), 5 (như 4 + `--no-segment`); mốc không graph lấy từ `outputs/kaggle_lan2/`.
 
+### 11.10. Hỏi–đáp: tuyến "vấn đề pháp lý", chỗ riêng cho điều chung, trả lời đầy đủ (2026-10-11, người dùng yêu cầu)
+
+- Phân tích lần 2 (graph): trong 355 điều luật sư trích, graph không đưa vào ứng viên 85/127 điều phần chung BLHS (1-107) và 27/30 điều BLTTHS (điều tội: 40/198); thiếu nhiều nhất BLTTHS 155, BLHS 2, 12, 51, 52, 9, 65. Kết quả theo câu: đúng hết 51/187, đủ nhưng thừa 28, trúng một phần 50, sai hết 33, không trích 25 (không graph: 16 / 0 / 22 / 149 / 0).
+- Tuyến mới `van_de_phap_ly` (`LEGAL_ISSUES_PROMPT`, `llm_issue_laws`): Qwen nêu ≤3 vấn đề pháp lý chung, mỗi vấn đề so với **tên điều** của 579 điều chung (BLHS 1-107 + BLTTHS), lấy 2 điều gần nhất. Thử trên graph thật: 9/10 vấn đề ra đúng điều ở vị trí 1.
+- Các điều này được thêm sau `max_candidates` điều khác, tối đa `general_slots` = 3, để không bị điều tội chiếm chỗ.
+- Trả lời: `cau_tra_loi` bắt buộc gồm kết luận (câu đầy đủ), căn cứ (điều, khoản, điểm và nội dung), phân tích; 80-200 từ. Câu dưới `min_answer_words` = 40 từ được hỏi lại một lần (`QA_ANSWER_TOO_SHORT_NOTE`), giữ câu dài hơn.
+
 ## 10. Tham chiếu
 
 - Sơ đồ tiến độ và kiến trúc truy vấn: <https://claude.ai/artifact/BMLpjNNcp1J9sgwnoyUX11> (artifact riêng của người dùng). Lưu ý: sơ đồ truy vấn trong đó còn thiếu 2 bước đã nêu ở mục 4.2.

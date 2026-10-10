@@ -97,9 +97,10 @@ def main() -> None:
             print(f"{len(questions)} câu × {1 + grade} lần gọi LLM (trả lời{', chấm' if grade else ''}) "
                   f"= {len(questions) * (1 + grade)} lần gọi, ước ~{len(questions) * (1 + grade) * 1_500:,} token đầu vào")
         else:
-            per_q = 1 + 1 + 2 * args.max_candidates + 1 + grade + (2 if args.rerank else 0)
+            slots = DEFAULTS["general_slots"]
+            per_q = 1 + 1 + 1 + 2 * (args.max_candidates + slots) + 2 + grade + (2 if args.rerank else 0)
             print(f"{len(questions)} câu × tối đa {per_q} lần gọi LLM "
-                  f"(đặc trưng, đoán tội, judge ≤{args.max_candidates} điều × 2, trả lời{', chấm' if grade else ''}) "
+                  f"(đặc trưng, đoán tội, vấn đề pháp lý, judge ≤{args.max_candidates}+{slots} điều × 2, trả lời + hỏi lại nếu ngắn{', chấm' if grade else ''}) "
                   f"= tối đa {len(questions) * per_q} lần gọi, ước ~{len(questions) * 60_000:,} token đầu vào")
         for q in questions:
             print(f"  #{q['qa_number']} [{gold[str(q['qa_number'])].get('nhom', '')}]: {q['title']}")
