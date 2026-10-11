@@ -57,8 +57,18 @@ DEFAULTS = {
     # titles of BLHS general-part (Điều 1-107) and BLTTHS articles; up to
     # general_slots of them are added after the max_candidates others, so
     # they are not crowded out by crime articles.
-    "general_slots": 3,
+    "general_slots": 4,
     "laws_per_issue": 2,
+    "max_issues": 5,
+    # Crime route: each crime the LLM names goes to its nearest Crime nodes
+    # (the original takes 1; 2 also catches a near crime when the name is
+    # off, e.g. "làm nhục" vs "đe dọa").
+    "crime_nodes_per_guess": 2,
+    # Q&A uses the law/crime graph only: on Kaggle run 3 the similar-case
+    # route found 49 right articles, every one also found by another route
+    # (0 found only by it), at 3 extra LLM calls per question. True brings
+    # the case routes (and the feature extraction they need) back.
+    "dung_an": False,
     # An answer shorter than this (words) is asked again once.
     "min_answer_words": 40,
     "judge_mode": "gop",
@@ -211,14 +221,16 @@ def general_title_index(g: HierarGraph, embed: Embed) -> List[Tuple[str, np.ndar
     return index
 
 
-def llm_issue_laws(g: HierarGraph, question: str, generate: Generate, embed: Embed, per_issue: int) -> Tuple[List[str], List[Dict]]:
-    """The LLM names <=3 general legal issues; each goes to the general
+def llm_issue_laws(
+    g: HierarGraph, question: str, generate: Generate, embed: Embed, per_issue: int, max_issues: int = 5
+) -> Tuple[List[str], List[Dict]]:
+    """The LLM names <=max_issues general legal issues; each goes to the general
     articles whose titles are closest."""
     issues = parse_crime_list(generate(LEGAL_ISSUES_PROMPT.format(question=question), max_tokens=128))
     index = general_title_index(g, embed)
     laws: List[str] = []
     hits = []
-    for issue in issues[:3]:
+    for issue in issues[:max_issues]:
         if not index or not issue.strip():
             continue
         q = _unit(embed(issue))
@@ -231,21 +243,21 @@ def llm_issue_laws(g: HierarGraph, question: str, generate: Generate, embed: Emb
     return laws, hits
 
 
-def llm_crime_laws(g: HierarGraph, text: str, generate: Generate, embed: Embed) -> Tuple[List[str], List[Dict]]:
+def llm_crime_laws(
+    g: HierarGraph, text: str, generate: Generate, embed: Embed, nodes_per_crime: int = 1
+) -> Tuple[List[str], List[Dict]]:
     """The original retrieve_law: the LLM names <=3 crimes, each goes to
-    its nearest Crime node, then back to its Law nodes."""
+    its nearest Crime node(s) (1 in the original), then back to their Law
+    nodes."""
     crimes = parse_crime_list(generate(RETRIEVE_LAW_PROMPT.format(fact=text), max_tokens=256))
     laws: List[str] = []
     hits = []
     for name in crimes[:3]:
-        hit = g.search(embed(name), "Crime", top_k=1)
-        if not hit:
-            continue
-        crime_node, sim = hit[0]
-        hits.append({"ten_llm": name, "crime_node": g.node(crime_node)["description"], "cosine": round(sim, 3)})
-        for law in g.predecessors(crime_node, "RELATED_CRIME"):
-            if law not in laws:
-                laws.append(law)
+        for crime_node, sim in g.search(embed(name), "Crime", top_k=nodes_per_crime):
+            hits.append({"ten_llm": name, "crime_node": g.node(crime_node)["description"], "cosine": round(sim, 3)})
+            for law in g.predecessors(crime_node, "RELATED_CRIME"):
+                if law not in laws:
+                    laws.append(law)
     return laws, hits
 
 
@@ -274,20 +286,24 @@ def retrieve_candidates(
 ) -> Dict:
     routes: Dict[str, List[str]] = {}
     rerank = None
-    if cfg["rerank"]:
+    if not cfg["dung_an"]:
+        pass
+    elif cfg["rerank"]:
         rerank = reranked_cases(g, query_vec, query_text or question, generate, cfg)
         routes["an_tuong_tu"] = laws_of_cases(g, [(c, 0.0) for c in rerank["an"]])
     else:
         routes["truc_tiep"] = laws_of_cases(g, direct_cases(g, query_vec, cfg["top_k_cases"]))
         routes["qua_cum"] = laws_of_cases(g, cluster_cases(g, query_vec, cfg["n_clusters"], cfg["top_k_cases"]))
 
-    routes["llm_doan_toi"], crime_hits = llm_crime_laws(g, question, generate, embed)
+    routes["llm_doan_toi"], crime_hits = llm_crime_laws(g, question, generate, embed, cfg["crime_nodes_per_guess"])
     question_vec = embed(question)
     routes["van_ban_luat"] = [n for n, _ in g.search(question_vec, "Law", top_k=cfg["top_k_laws_text"])]
     routes["huong_dan"] = guidance_laws(g, question_vec, embed, cfg["top_k_guidance"])
     issue_hits: List[Dict] = []
     if cfg["general_slots"]:
-        routes["van_de_phap_ly"], issue_hits = llm_issue_laws(g, question, generate, embed, cfg["laws_per_issue"])
+        routes["van_de_phap_ly"], issue_hits = llm_issue_laws(
+            g, question, generate, embed, cfg["laws_per_issue"], cfg["max_issues"]
+        )
 
     order = ["llm_doan_toi", "huong_dan", "van_ban_luat", "an_tuong_tu", "truc_tiep", "qua_cum"]
     candidates: List[str] = []
@@ -360,9 +376,11 @@ def answer_question(
     g: HierarGraph, question: str, generate: Generate, embed: Embed, cfg: Optional[Dict] = None
 ) -> Dict:
     cfg = {**DEFAULTS, **(cfg or {})}
-    features = parse_features(generate(build_prompt(question)))
-    features = sanitize_features(features) if features else None
-    description = concat_feature_description(features) if features else ""
+    description = ""
+    if cfg["dung_an"]:  # features only serve the case routes
+        features = parse_features(generate(build_prompt(question)))
+        features = sanitize_features(features) if features else None
+        description = concat_feature_description(features) if features else ""
     query_vec = embed(description or question)
 
     retrieval = retrieve_candidates(g, question, query_vec, generate, embed, cfg, description)

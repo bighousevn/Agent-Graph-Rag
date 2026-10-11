@@ -243,3 +243,38 @@ def test_guidance_citations_are_not_scored():
                           {"luat": "Công văn 250/TANDTC-PC", "dieu": "1"}], "toi_danh": []}
     s = score(pred, gold)
     assert s["dieu_recall"] == 1.0 and s["dieu_precision"] == 1.0
+
+
+def test_qa_mode_skips_cases_and_features_by_default():
+    from vn_legal_graph.qa.pipeline import DEFAULTS, retrieve_candidates
+
+    g, _ = build_base_graph(LAWS, [], fake_embed)
+    asked = []
+
+    def fake(prompt, max_tokens=None):
+        asked.append(prompt)
+        assert "Nhân thân bị cáo" not in prompt and "nhóm tội phạm" not in prompt and "vụ án tương tự" not in prompt
+        if "tối đa ba tội danh" in prompt:
+            return '["Tội đánh bạc"]'
+        if "vấn đề pháp lý CHUNG" in prompt:
+            assert "tối đa năm vấn đề" in prompt and "Thủ tục tố tụng hình sự" in prompt
+            return "[]"
+        if "luật sư tư vấn" in prompt:
+            return '{"cau_tra_loi": "' + " ".join(["x"] * 50) + '", "dieu_luat": []}'
+        return "true"
+
+    out = answer_question(g, "Đánh bạc có bị tù không?", fake, fake_embed)
+    assert out["dac_trung"] == "" and not any(k in out["truy_xuat"]["tuyen"] for k in ("truc_tiep", "qua_cum", "an_tuong_tu"))
+    with_cases = retrieve_candidates(g, "q", fake_embed("q"), lambda p, max_tokens=None: "[]", fake_embed, {**DEFAULTS, "dung_an": True})
+    assert "truc_tiep" in with_cases["tuyen"]
+
+
+def test_crime_route_takes_two_nearest_crime_nodes():
+    from vn_legal_graph.qa.pipeline import llm_crime_laws
+
+    laws = LAWS + [{"id": 322, "suffix": "", "title": "Tội tổ chức đánh bạc hoặc gá bạc", "items": [{"text": "Điều 322.",
+                    "crime": ["Tội tổ chức đánh bạc hoặc gá bạc"], "judge_dep": [], "related_laws": []}]}]
+    g, _ = build_base_graph(laws, [], fake_embed)
+    one, _ = llm_crime_laws(g, "x", lambda p, max_tokens=None: '["Tội đánh bạc"]', fake_embed)
+    two, hits = llm_crime_laws(g, "x", lambda p, max_tokens=None: '["Tội đánh bạc"]', fake_embed, 2)
+    assert len(one) == 1 and set(two) == {"law:321", "law:322"} and len(hits) == 2

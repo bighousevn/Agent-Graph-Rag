@@ -252,10 +252,13 @@ Trả lời:
 LEGAL_ISSUES_PROMPT = """
 Bạn là luật sư hình sự. Hãy xác định các vấn đề pháp lý CHUNG mà câu hỏi dưới đây cần giải quyết, ngoài việc xác định tên tội.
 
-Vấn đề pháp lý chung là các nội dung thuộc phần chung Bộ luật Hình sự (như độ tuổi chịu trách nhiệm hình sự, lỗi, phòng vệ chính đáng, đồng phạm, chuẩn bị phạm tội, tình tiết giảm nhẹ, tình tiết tăng nặng, án treo, thời hiệu, miễn trách nhiệm hình sự, án tích) hoặc thủ tục tố tụng hình sự (như khởi tố, tố giác, tạm giữ, tạm giam, quyền của bị can bị cáo hoặc bị hại, thẩm quyền, xét xử, kháng cáo).
+Vấn đề pháp lý chung gồm hai loại:
+- Phần chung Bộ luật Hình sự: như độ tuổi chịu trách nhiệm hình sự, lỗi, phòng vệ chính đáng, đồng phạm, chuẩn bị phạm tội, tình tiết giảm nhẹ, tình tiết tăng nặng, án treo, thời hiệu, miễn trách nhiệm hình sự, án tích.
+- Thủ tục tố tụng hình sự (Bộ luật Tố tụng hình sự): như khởi tố theo yêu cầu bị hại, rút yêu cầu khởi tố, tố giác và tin báo tội phạm, tạm giữ, tạm giam, quyền và nghĩa vụ của bị can, bị cáo, bị hại, người bào chữa, thẩm quyền điều tra hoặc xét xử, xét xử vắng mặt, kháng cáo.
 
 Yêu cầu:
-- Chỉ nêu vấn đề mà câu hỏi thật sự cần để trả lời; tối đa ba vấn đề, mỗi vấn đề là một cụm từ ngắn giống tên một điều luật.
+- Chỉ nêu vấn đề mà câu hỏi thật sự cần để trả lời; tối đa năm vấn đề, mỗi vấn đề là một cụm từ ngắn giống tên một điều luật.
+- Nếu câu hỏi hỏi về việc phải làm gì, quyền gì, ai có thẩm quyền, thủ tục ra sao, phải nêu cả vấn đề thủ tục tố tụng.
 - Không nêu tên tội.
 - Chỉ xuất một danh sách dạng Python, không giải thích. Nếu không có vấn đề chung nào, xuất [].
 

@@ -943,6 +943,14 @@ Cấu hình: prompt không còn ví dụ, trả lời 80-200 từ, tuyến `van_
 
 - Không tách bị cáo: hết lỗi thừa điều (0/32 lỗi), nhưng thiếu điều ở án nhiều tội nên F1 thấp hơn. Auditor kiểm tra từng yếu tố nhẹ tay hơn (46/48 còn lại). Cả hai bài, chỗ mất điểm vẫn là bước Qwen chọn cuối.
 
+### 11.12. Tách hai chức năng; hỏi–đáp chỉ dùng graph luật + tội (2026-10-11, người dùng chọn)
+
+- Hai chức năng: **hỏi–đáp** (`scripts/run_qa_pilot.py`, `vn_legal_graph/qa/`) và **hỏi án** (`scripts/run_case_pipeline.py`, `vn_legal_graph/judge/case_pipeline.py`). Notebook chọn bằng `CHUC_NANG = 'hoi-dap' | 'hoi-an' | 'ca-hai'`.
+- Người dùng không muốn Qwen tự chọn điều luật trong một bước riêng (không làm "tách chọn điều / viết trả lời"): hệ thống đưa điều luật, Qwen chỉ trả lời dựa trên đó.
+- Hỏi–đáp bỏ tuyến án (`dung_an` = False, bật lại bằng `--dung-an`): lần 3 tuyến án tìm ra 49 điều đúng, cả 49 đều có tuyến khác tìm ra (0 riêng), tốn 3 lời gọi/câu; bỏ luôn bước trích đặc trưng. Đóng góp riêng của các tuyến khác: đoán tội 33, hướng dẫn 18, vấn đề pháp lý 17, văn bản luật 11.
+- Tuyến đoán tội lấy 2 node Tội danh gần nhất cho mỗi tên Qwen nêu (`crime_nodes_per_guess`; hỏi án giữ 1 như gốc). Tuyến vấn đề pháp lý: tối đa 5 vấn đề, nhắc rõ thủ tục tố tụng (BLTTHS mới đúng 4/30), `general_slots` 4.
+- Không thêm án: 18/41 điều tội hỏi–đáp bỏ sót không có án nào, nhưng án không đóng góp riêng cho hỏi–đáp; người dùng thấy thêm án không khả thi.
+
 ## 10. Tham chiếu
 
 - Sơ đồ tiến độ và kiến trúc truy vấn: <https://claude.ai/artifact/BMLpjNNcp1J9sgwnoyUX11> (artifact riêng của người dùng). Lưu ý: sơ đồ truy vấn trong đó còn thiếu 2 bước đã nêu ở mục 4.2.

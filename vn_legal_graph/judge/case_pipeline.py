@@ -70,6 +70,9 @@ DEFAULTS = {
     # Per defendant (LIST_DEFENDANTS + CASE_SEG, as the original); False:
     # the whole judgment as one query (our labels are per judgment).
     "segment": True,
+    # Q&A-only settings, back to the original for the judgment task.
+    "dung_an": True,
+    "crime_nodes_per_guess": 1,
     "case_chars": 800,
     "guidance_chars": 2000,
 }

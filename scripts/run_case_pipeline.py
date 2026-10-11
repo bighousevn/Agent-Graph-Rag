@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The original judgment pipeline on the held-out test cases:
+"""Function 2, hỏi án (function 1, hỏi–đáp, is run_qa_pilot.py): the original judgment pipeline on the held-out test cases:
 per defendant Researcher -> Auditor -> Adjudicator
 (vn_legal_graph/judge/case_pipeline.py), scored like the paper
 (evaluation/evaluate_results.py): charge and article accuracy / micro-F1,

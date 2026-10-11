@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Legal Q&A pilot: answer the first N questions of data/raw/questions.xlsx
+"""Function 1, hỏi–đáp (legal Q&A; function 2, hỏi án, is run_case_pipeline.py): answer the first N questions of data/raw/questions.xlsx
 with the HierarGraph and score them against data/qa/pilot_gold.json.
 
     python scripts/run_qa_pilot.py --dry-run     # what will run, rough cost; no LLM, no .env
@@ -55,7 +55,9 @@ def main() -> None:
     parser.add_argument("--merge", nargs="+", default=[], help="Join the result files of the shards into --merge-out, then report.")
     parser.add_argument("--merge-out", default="")
     parser.add_argument("--loc-theo-judge", action="store_true", help="Original hard filter: answer only from accepted articles.")
-    parser.add_argument("--rerank", action="store_true", help="Original LLM rerank of clusters and cases (2 more calls per question).")
+    parser.add_argument("--rerank", action="store_true", help="With --dung-an: original LLM rerank of clusters and cases (2 more calls per question).")
+    parser.add_argument("--dung-an", action="store_true",
+                        help="Also the similar-case routes (and the feature extraction they need). Off by default: Q&A uses the law/crime graph only.")
     parser.add_argument("--auto-gold", action="store_true", help="Reference articles from the lawyer's answer.")
     parser.add_argument("--guidance-links", default="data/raw/guidance/guidance_links.json")
     parser.add_argument("--cong-van-tay", default="data/qa/cong_van_tay.json")
@@ -98,9 +100,9 @@ def main() -> None:
                   f"= {len(questions) * (1 + grade)} lần gọi, ước ~{len(questions) * (1 + grade) * 1_500:,} token đầu vào")
         else:
             slots = DEFAULTS["general_slots"]
-            per_q = 1 + 1 + 1 + 2 * (args.max_candidates + slots) + 2 + grade + (2 if args.rerank else 0)
+            per_q = (1 + (2 if args.rerank else 0) if args.dung_an else 0) + 1 + 1 + 2 * (args.max_candidates + slots) + 2 + grade
             print(f"{len(questions)} câu × tối đa {per_q} lần gọi LLM "
-                  f"(đặc trưng, đoán tội, vấn đề pháp lý, judge ≤{args.max_candidates}+{slots} điều × 2, trả lời + hỏi lại nếu ngắn{', chấm' if grade else ''}) "
+                  f"({'đặc trưng, án tương tự, ' if args.dung_an else ''}đoán tội, vấn đề pháp lý, judge ≤{args.max_candidates}+{slots} điều × 2, trả lời + hỏi lại nếu ngắn{', chấm' if grade else ''}) "
                   f"= tối đa {len(questions) * per_q} lần gọi, ước ~{len(questions) * 60_000:,} token đầu vào")
         for q in questions:
             print(f"  #{q['qa_number']} [{gold[str(q['qa_number'])].get('nhom', '')}]: {q['title']}")
@@ -114,7 +116,7 @@ def main() -> None:
     cfg = EmbeddingConfig()
     embedder = CachedEmbedder(embedder_from_config(cfg), cfg.model_name)
     run_cfg = {"judge_mode": args.judge_mode, "max_candidates": args.max_candidates,
-               "loc_theo_judge": args.loc_theo_judge, "rerank": args.rerank}
+               "loc_theo_judge": args.loc_theo_judge, "rerank": args.rerank, "dung_an": args.dung_an}
 
     model_slug = re.sub(r"[^\w.-]", "_", client.llm_config.model)
     out = f"outputs/{'qa_llm_only' if args.without_graph else 'qa_pilot'}_{model_slug}{'_' + args.tag if args.tag else ''}{shard_suffix(args.shard)}.json"
