@@ -4,7 +4,69 @@
 > Nó thay cho toàn bộ cuộc trò chuyện trước, diễn ra trong một container cloud và không chuyển sang máy này được.
 > Đừng hỏi lại những gì đã ghi ở mục "Quyết định đã chốt".
 
-Cập nhật lần cuối: 2026-10-01 (phiên local, sau khi phân tích ViCSR). Nhánh: `claude/legalgraphrag-framework-hv23z3`.
+Cập nhật lần cuối: 2026-10-11 (mục 0). Nhánh: `claude/legalgraphrag-framework-hv23z3`.
+
+---
+
+## 0. TÓM TẮT HIỆN TRẠNG (2026-10-11) — đọc mục này trước
+
+Các mục 1–9 là lịch sử từ 2026-10-01 (phạm vi 2 chương, "Claude không chạy LLM"…), **đã lỗi thời**; khi mâu thuẫn thì mục 0 và mục 11.x đúng. Chi tiết từng bước ở mục 11.1–11.12.
+
+### 0.1. Hệ thống làm gì
+
+Tái hiện LegalGraphRAG (ACL 2026, PDF: <https://aclanthology.org/2026.acl-long.1738.pdf>) cho luật hình sự Việt Nam, gồm **hai chức năng**:
+
+| Chức năng | Script | Code | Dùng |
+|---|---|---|---|
+| **Hỏi–đáp** (phần mở rộng, bài báo không có) | `scripts/run_qa_pilot.py` | `vn_legal_graph/qa/` | Graph luật + tội + văn bản hướng dẫn; **không dùng án** (`--dung-an` để bật lại) |
+| **Hỏi án** (đoán tội từ bản án, bài của bài báo) | `scripts/run_case_pipeline.py` | `vn_legal_graph/judge/case_pipeline.py` | Như bài báo: Researcher → Auditor (kiểm tra từng yếu tố, lọc cứng) → Adjudicator (xem điều + án + tội) |
+
+- **Graph** (`outputs/hierargraph.pkl`, có trong git; Neo4j tuỳ chọn ở máy): 1.117 Law (BLHS 2025 hợp nhất 135/VBHN-VPQH, BLTTHS, Luật XLVPHC, NĐ 282), 315 Crime, 288 Case (ViCSR + anle.toaan.gov.vn), 9 Cluster; 294 đơn vị Công văn/Nghị quyết gắn vào điều luật. Xây ngày 2026-10-07 bằng deepseek-flash.
+- **Dữ liệu test**: hỏi–đáp 187 câu có đáp án chấm tự động (`data/raw/questions.xlsx`, 231 câu; 44 câu luật sư không trích BLHS/BLTTHS nên bỏ); hỏi án 55 án (`data/processed/cases_vn_test.json`, không có trong graph).
+
+### 0.2. Quyết định đã chốt (người dùng)
+
+- **Suy luận chỉ bằng Qwen3-8B** (Ollama `qwen3:8b-q8_0`, think tắt) trên **Kaggle** qua `notebooks/qwen_kaggle.ipynb`. **Không dùng DeepSeek nữa**, kể cả chấm điểm. Máy người dùng không có GPU NVIDIA.
+- **Xây graph lần sau bằng GPT-4o-mini** như bài báo (người dùng tự đặt OpenAI key vào `.env`). Embedding giữ **bkai vietnamese-bi-encoder** (không đổi sang BGE-m3).
+- **Không thêm án** vào graph (không khả thi; án không đóng góp riêng cho hỏi–đáp).
+- **Không cho Qwen tự chọn điều trong một bước riêng**: hệ thống đưa điều luật, Qwen trả lời dựa trên đó.
+- Không chạy lượt "không graph" nữa; mốc so sánh lấy từ `outputs/kaggle_lan2/`.
+- Câu trả lời hỏi–đáp phải đầy đủ: kết luận + căn cứ (điều, khoản, điểm) + phân tích, 80–200 từ; dưới 40 từ thì hỏi lại một lần.
+- Chấm hoàn toàn tự động: hỏi–đáp = recall/precision điều luật so với điều luật sư trích (chỉ tính trích dẫn BLHS/BLTTHS); hỏi án = accuracy và micro-F1 (như bài báo).
+- Bảo mật: không đọc/in/sửa `.env`; script gọi LLM được phép chạy theo `.claude/settings.json`, luôn `--dry-run` trước (xem `CLAUDE.md`).
+
+### 0.3. Kết quả mới nhất (Qwen3-8B, Kaggle)
+
+| Hỏi–đáp, 187 câu | recall | precision | đúng hết | sai hết | độ dài |
+|---|---|---|---|---|---|
+| không graph (lần 2, prompt cũ còn lỗi chép ví dụ) | 0,14 | 0,19 | 16 | 149 | 3 từ |
+| graph lần 2 | 0,53 | 0,59 | 56 | 33 | 1 từ |
+| graph lần 3 (tuyến vấn đề pháp lý, trả lời đầy đủ) | 0,52 | 0,59 | 56 | 44 | 126 từ |
+
+| Hỏi án, 55 án | tội acc | điều acc | điều F1 |
+|---|---|---|---|
+| không graph (lần 2) | 0,40 | 0,18 | 0,28 |
+| như bài báo (lần 3) | 0,40 | 0,36 | 0,67 |
+| như bài báo, không tách bị cáo (lần 3) | 0,42 | 0,42 | 0,58 |
+| bài báo, Qwen3-8B, CAIL (để so) | 0,409 | 0,479 | — |
+
+- Cả hai chức năng: graph đưa được đáp án vào danh sách ứng viên (hỏi án 48/55 án; hỏi–đáp 75% số điều), điểm mất ở bước Qwen chọn cuối.
+- Hỏi–đáp lần 3, 355 điều chuẩn: graph bỏ sót 41 điều tội, 66 điều phần chung BLHS, 25 điều BLTTHS; 83 điều có trong ứng viên nhưng Qwen không trích.
+- Kết quả thô: `outputs/kaggle_lan2/`, `outputs/results/outputs/` (lần 3; `outputs/` không vào git).
+
+### 0.4. Đang chờ / việc tiếp theo
+
+1. **Người dùng chạy Kaggle** với `CHUC_NANG = 'hoi-dap'` (commit `72639fc`: bỏ tuyến án, 2 node Tội danh mỗi tên đoán, tối đa 5 vấn đề pháp lý kể cả thủ tục, 4 chỗ riêng cho điều chung). Dry-run: tối đa ~5.200 lời gọi, chia 2 GPU.
+2. Khi có kết quả: gộp
+   `python scripts/run_qa_pilot.py --merge outputs/qa_pilot_qwen3_8b-q8_0_full_phan1-2.json outputs/qa_pilot_qwen3_8b-q8_0_full_phan2-2.json --merge-out outputs/qa_pilot_qwen3_8b-q8_0_full.json`
+   rồi so với lần 3: điểm, đóng góp từng tuyến (đặc biệt BLTTHS, phần chung), số câu trả lời ngắn/rỗng.
+3. Người dùng muốn **tập trung hỏi–đáp trước**, hỏi án làm sau.
+
+### 0.5. Cách chạy
+
+- Ở máy: `.venv/bin/python -m pytest tests/ -q` (160 passed, 1 skipped); `--dry-run` cho cả hai script.
+- Kaggle: import `notebooks/qwen_kaggle.ipynb` (import lại mỗi khi ô notebook đổi; code Python tự clone từ GitHub), GPU T4 x2, Internet On, chọn `CHUC_NANG`, Save & Run All. Output: `outputs/*.json`, `outputs/luot*.log`, `cache_llm.tar.gz`, `ollama*.log`. Chạy tiếp sau 12 giờ: thêm Output cũ làm Input. Tải từng file từ tab Output (CLI `kaggle kernels output` hay bị 429).
+- Chia một lượt cho nhiều GPU/notebook: `--shard K/N`, gộp bằng `--merge … --merge-out` (cả hai script).
 
 ---
 
