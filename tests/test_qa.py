@@ -235,3 +235,11 @@ def test_retry_keeps_the_longer_answer():
     assert retried and len(ans["cau_tra_loi"].split()) == 50
     _, ans, retried = answer_with_retry("p", lambda p, max_tokens=None: '{"cau_tra_loi": "' + " ".join(["a"] * 45) + '"}', 40)
     assert not retried
+
+
+def test_guidance_citations_are_not_scored():
+    gold = {"dieu_luat_bat_buoc": [{"luat": "BLHS", "dieu": "321"}], "toi_danh": []}
+    pred = {"dieu_luat": [{"luat": "Bộ luật Hình sự", "dieu": "321"}, {"luat": "Nghị quyết 04/2025/NQ-HĐTP", "dieu": "3"},
+                          {"luat": "Công văn 250/TANDTC-PC", "dieu": "1"}], "toi_danh": []}
+    s = score(pred, gold)
+    assert s["dieu_recall"] == 1.0 and s["dieu_precision"] == 1.0

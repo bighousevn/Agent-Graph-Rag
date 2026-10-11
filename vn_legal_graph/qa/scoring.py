@@ -32,6 +32,9 @@ def question_text(q: Dict) -> str:
     return f"{q['title']}\n{q['question']}".strip()
 
 
+SCORED_CODES = ("BLHS", "BLTTHS")
+
+
 def norm_law(name: str) -> str:
     key = (name or "").strip().lower()
     return LAW_ALIASES.get(key, name.strip().upper() if name else "")
@@ -75,7 +78,11 @@ def score(prediction: Dict, gold: Dict) -> Dict:
     - crimes: recall/precision of crime names (optional crimes allowed).
     """
     pred = [norm_citation(c) for c in prediction.get("dieu_luat", [])]
-    pred_keys = {(c["luat"], c["dieu"]) for c in pred}
+    # Only codes the gold can contain are scored: the gold comes from the
+    # lawyer's BLHS/BLTTHS citations (auto_gold), so a cited Nghị quyết or
+    # Công văn is neither right nor wrong here (Qwen cited 54 of them,
+    # 2026-10-11, all counted as errors before).
+    pred_keys = {(c["luat"], c["dieu"]) for c in pred if c["luat"] in SCORED_CODES}
     req = [norm_citation(c) for c in gold["dieu_luat_bat_buoc"]]
     opt = [norm_citation(c) for c in gold.get("dieu_luat_tuy_chon", [])]
     req_keys = {(c["luat"], c["dieu"]) for c in req}

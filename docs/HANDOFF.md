@@ -923,6 +923,26 @@ Kết quả lần 2 (`outputs/kaggle_lan2/`, Qwen3-8B, think tắt): hỏi–đ�
 - Trả lời: `cau_tra_loi` bắt buộc gồm kết luận (câu đầy đủ), căn cứ (điều, khoản, điểm và nội dung), phân tích; 80-200 từ. Câu dưới `min_answer_words` = 40 từ được hỏi lại một lần (`QA_ANSWER_TOO_SHORT_NOTE`), giữ câu dài hơn.
 - Đọc diễn biến: `case_pipeline.fact_chars` 4.000 → 10.000 ký tự (cả trích đặc trưng truy vấn và `judge_law.CASE_MAX_CHARS`); 24/55 án test dài hơn 4.000 (không graph đúng 1/24, có graph 8/24). `JUDGE_ELEMENT_PROMPT` đặt vụ án, điều luật, tài liệu bổ trợ trước yếu tố để ~16 lời gọi của một điều dùng chung tiền tố (server giữ cache). Ollama trên Kaggle: ngữ cảnh 24.576 token.
 
+### 11.11. Kết quả Kaggle lần 3 (2026-10-11, `outputs/results/`)
+
+Cấu hình: prompt không còn ví dụ, trả lời 80-200 từ, tuyến `van_de_phap_ly`, đọc 10.000 ký tự, vụ án như bài báo. Chấm hỏi–đáp đã sửa: precision chỉ tính trích dẫn BLHS/BLTTHS (`scoring.SCORED_CODES`); Qwen trích 54 Nghị quyết/Công văn, trước bị tính sai. Số dưới đây chấm lại cả lần 2 theo cách mới.
+
+| hỏi–đáp (187 câu) | recall | precision | đúng hết | đủ+thừa | một phần | sai hết | không trích | độ dài |
+|---|---|---|---|---|---|---|---|---|
+| không graph (lần 2, prompt cũ) | 0,14 | 0,19 | 16 | 0 | 22 | 149 | 0 | 3 từ |
+| graph lần 2 | 0,53 | 0,59 | 56 | 23 | 50 | 33 | 25 | 1 từ |
+| graph lần 3 | 0,52 | 0,59 | 56 | 19 | 53 | 44 | 15 | 126 từ |
+
+- Lần 3: điều chuẩn có trong ứng viên 0,70 → 0,75; recall điều phần chung 31 → 39/127, BLTTHS 3 → 4/30, điều tội 104 → 98/198. Câu trả lời đầy đủ (126 từ) mà điểm điều luật giữ nguyên.
+
+| vụ án (55 án) | tội acc | tội F1 | điều acc | điều F1 | đáp án trong ứng viên | còn sau Auditor | đúng |
+|---|---|---|---|---|---|---|---|
+| như code gốc (lần 2) | 0,42 | 0,66 | 0,40 | 0,65 | 49 | 43 | 22 |
+| như bài báo (lần 3) | 0,40 | 0,68 | 0,36 | 0,67 | 48 | 46 | 20 |
+| như bài báo, không tách bị cáo | 0,42 | 0,58 | 0,42 | 0,58 | 45 | 41 | 23 |
+
+- Không tách bị cáo: hết lỗi thừa điều (0/32 lỗi), nhưng thiếu điều ở án nhiều tội nên F1 thấp hơn. Auditor kiểm tra từng yếu tố nhẹ tay hơn (46/48 còn lại). Cả hai bài, chỗ mất điểm vẫn là bước Qwen chọn cuối.
+
 ## 10. Tham chiếu
 
 - Sơ đồ tiến độ và kiến trúc truy vấn: <https://claude.ai/artifact/BMLpjNNcp1J9sgwnoyUX11> (artifact riêng của người dùng). Lưu ý: sơ đồ truy vấn trong đó còn thiếu 2 bước đã nêu ở mục 4.2.
