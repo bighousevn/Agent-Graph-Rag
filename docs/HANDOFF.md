@@ -28,7 +28,7 @@ Tái hiện LegalGraphRAG (ACL 2026, PDF: <https://aclanthology.org/2026.acl-lon
 
 - **Suy luận chỉ bằng Qwen3-8B** (Ollama `qwen3:8b-q8_0`, think tắt) trên **Kaggle** qua `notebooks/qwen_kaggle.ipynb`. **Không dùng DeepSeek nữa**, kể cả chấm điểm. Máy người dùng không có GPU NVIDIA.
 - **Xây graph lần sau bằng GPT-4o-mini** như bài báo (người dùng tự đặt OpenAI key vào `.env`). Embedding giữ **bkai vietnamese-bi-encoder** (không đổi sang BGE-m3).
-- **Không thêm án** vào graph (không khả thi; án không đóng góp riêng cho hỏi–đáp).
+- **Thêm án cho ngang bài báo** (người dùng đổi ý 2026-10-11, thay cho "không thêm án"): cào bản án sơ thẩm từ congbobanan.toaan.gov.vn, mỗi tội đủ quota của bài báo (≤20 án kho + 5 án test). Hỏi–đáp vẫn không dùng tuyến án (`--dung-an` để bật). Xem mục 11.13.
 - **Không cho Qwen tự chọn điều trong một bước riêng**: hệ thống đưa điều luật, Qwen trả lời dựa trên đó.
 - Không chạy lượt "không graph" nữa; mốc so sánh lấy từ `outputs/kaggle_lan2/`.
 - Câu trả lời hỏi–đáp phải đầy đủ: kết luận + căn cứ (điều, khoản, điểm) + phân tích, 80–200 từ; dưới 40 từ thì hỏi lại một lần.
@@ -56,11 +56,9 @@ Tái hiện LegalGraphRAG (ACL 2026, PDF: <https://aclanthology.org/2026.acl-lon
 
 ### 0.4. Đang chờ / việc tiếp theo
 
-1. **Người dùng chạy Kaggle** với `CHUC_NANG = 'hoi-dap'` (commit `72639fc`: bỏ tuyến án, 2 node Tội danh mỗi tên đoán, tối đa 5 vấn đề pháp lý kể cả thủ tục, 4 chỗ riêng cho điều chung). Dry-run: tối đa ~5.200 lời gọi, chia 2 GPU.
-2. Khi có kết quả: gộp
-   `python scripts/run_qa_pilot.py --merge outputs/qa_pilot_qwen3_8b-q8_0_full_phan1-2.json outputs/qa_pilot_qwen3_8b-q8_0_full_phan2-2.json --merge-out outputs/qa_pilot_qwen3_8b-q8_0_full.json`
-   rồi so với lần 3: điểm, đóng góp từng tuyến (đặc biệt BLTTHS, phần chung), số câu trả lời ngắn/rỗng.
+1. Lần 4 (hỏi–đáp không án) đã chạy, kết quả ở mục 11.13: ngang lần 3. Việc kế: sửa tuyến vấn đề pháp lý (Qwen chép danh sách ví dụ trong prompt, các điều chung chung chiếm hết chỗ riêng).
 3. Người dùng muốn **tập trung hỏi–đáp trước**, hỏi án làm sau.
+4. **Kho án mới (mục 11.13)**: cào congbobanan xong → `build_cases.py --congbobanan` → trích đặc trưng (GPT-4o-mini, dry-run trước) → `build_graph.py` → tóm tắt cụm → dựng lại → commit graph + án test + cache embedding.
 
 ### 0.5. Cách chạy
 
@@ -1012,6 +1010,33 @@ Cấu hình: prompt không còn ví dụ, trả lời 80-200 từ, tuyến `van_
 - Hỏi–đáp bỏ tuyến án (`dung_an` = False, bật lại bằng `--dung-an`): lần 3 tuyến án tìm ra 49 điều đúng, cả 49 đều có tuyến khác tìm ra (0 riêng), tốn 3 lời gọi/câu; bỏ luôn bước trích đặc trưng. Đóng góp riêng của các tuyến khác: đoán tội 33, hướng dẫn 18, vấn đề pháp lý 17, văn bản luật 11.
 - Tuyến đoán tội lấy 2 node Tội danh gần nhất cho mỗi tên Qwen nêu (`crime_nodes_per_guess`; hỏi án giữ 1 như gốc). Tuyến vấn đề pháp lý: tối đa 5 vấn đề, nhắc rõ thủ tục tố tụng (BLTTHS mới đúng 4/30), `general_slots` 4.
 - Không thêm án: 18/41 điều tội hỏi–đáp bỏ sót không có án nào, nhưng án không đóng góp riêng cho hỏi–đáp; người dùng thấy thêm án không khả thi.
+
+### 11.13. Cào án congbobanan.toaan.gov.vn cho ngang bài báo (2026-10-11, người dùng chọn)
+
+**Vì sao:** bài báo dựng kho 14.049 án (CAIL 3.512 + JuDGE 5.752 + CMDL 4.785; CAIL/CMDL `--max-per-charge 20`), test CAIL 568 án (5 án/tội), CMDL 1.374 (`docs/TABLE2_REPRODUCTION.md` của repo gốc). Mình có kho 291 án / 62 tội, test 55 án / 11 tội. Người dùng chọn "cào thêm, đủ 20 án/tội" (không chọn "bỏ trần, dùng hết ViCSR": 93% là Điều 249).
+
+**Trang** (kiểm tra 2026-10-11): ASP.NET WebForms, mọi thao tác là postback mang `__VIEWSTATE` trong cùng một phiên (view state của phiên khác báo "Validation of viewstate MAC failed"). Server không gửi chứng chỉ trung gian → `vn_legal_graph/cases/certs/globalsign_rsa_ov_ssl_ca_2018.pem` ghép vào bundle certifi (vẫn kiểm tra SSL). Không có robots.txt.
+- Luồng: GET `/` → GET `/0t15at1cvn1/Tra-cu-ban-an` → postback Loại án = Hình sự (`50`) để nạp danh sách 601 "quan hệ pháp luật" (BLHS 1999 + 2015; lấy 316 mục BLHS 2015/2025) → chọn tội + Bản án (`0`) + `cmd_search_banner` → 20 án/trang, `cmdnext`. Bộ lọc cấp xét xử không có lựa chọn → lọc "Sơ thẩm" từ danh sách. PDF: `/3ta<id>t1cvn/`, dự phòng link `/5ta<id>t1cvn/<file>.pdf` ở trang chi tiết.
+- PDF là văn bản đã ẩn danh ("Nguyễn Tấn H"), cấu trúc NỘI DUNG VỤ ÁN → NHẬN ĐỊNH → QUYẾT ĐỊNH; án 2025–2026 xử theo BLHS sau Luật 86/2025, khớp graph luật (135/VBHN). **Khoảng 30% PDF là ảnh quét** (Điều 180: 11/36), máy không có OCR → bỏ qua (cài `tesseract-ocr-vie` nếu muốn lấy lại). Một số PDF lỗi 500/404 cả hai đường.
+- Nhãn tội trên trang không tin được với tội hiếm (tìm Điều 117 ra án 249/251; 108 → 201) → nhãn lấy từ phần quyết định.
+
+**Code:**
+- `vn_legal_graph/cases/congbobanan.py`: đọc form/danh sách/số kết quả, `Client` (một request mỗi lần, chờ 2 giây, thử lại 5xx/timeout), `pdf_to_text` (poppler), `record_from_text` (cùng schema ViCSR/anle, id `cbba-<id>`): văn bản → dạng ViCSR (NFC, bỏ số trang, chữ thường) → `split_sections`; nhãn = câu "tuyên bố bị cáo … phạm tội <tên>" (`ten_toi`), dự phòng `dieu_luat_xac_nhan` = điều tội được trích **thuộc BLHS** trong phần quyết định (bỏ BLTTHS 331/333…) và có "tội <2 chữ đầu tên>" hoặc trùng nhãn trang; diễn biến như ViCSR (`extract_facts`, che tên tội cả dạng rút gọn); bỏ án phúc thẩm, PDF < 200 từ.
+- `scripts/crawl_congbobanan.py`: mỗi tội đọc trang và tải xen kẽ đến khi đủ `--per-crime` (30) án sơ thẩm có chữ (ảnh quét, lỗi tải không tính); ghi `data/raw/congbobanan/{progress.json, listings.jsonl, txt/<id>.txt, crawl.log}` (gitignore; không giữ PDF); chạy lại thì làm tiếp. `--count-only`, `--articles`, `--redo`.
+- `scripts/build_cases.py --congbobanan data/raw/congbobanan`.
+- Test: `tests/test_congbobanan.py` (HTML chép theo markup thật, client giả).
+
+### 11.13. Kết quả Kaggle lần 4: hỏi–đáp không dùng án (2026-10-11, `outputs/results (1)/`)
+
+| hỏi–đáp, 187 câu | recall | precision | đúng hết | đủ+thừa | một phần | sai hết | không trích | ứng viên TB |
+|---|---|---|---|---|---|---|---|---|
+| lần 3 (có án) | 0,52 | 0,59 | 56 | 19 | 53 | 44 | 15 | 10,8 |
+| lần 4 (không án, 2 node tội, ≤5 vấn đề, 4 chỗ) | 0,50 | 0,59 | 55 | 16 | 52 | 53 | 11 | 11,9 |
+
+- Điều chuẩn trong ứng viên: 223/355 cả hai lần (tội 157 → 161, phần chung 61 → 58, BLTTHS 5 → 4). Bỏ án không mất độ phủ, bớt 3 lời gọi/câu. Từng câu: lần 4 tốt hơn 18, kém hơn 25 (phần lớn là dao động của Qwen).
+- Tuyến đoán tội (2 node) thành tuyến chính: riêng nó tìm ra 55 điều (lần 3: 33).
+- **Lỗi tuyến vấn đề pháp lý: Qwen chép danh sách ví dụ trong `LEGAL_ISSUES_PROMPT`**: "độ tuổi chịu trách nhiệm hình sự" 146/187 câu, "thẩm quyền điều tra" 93, "tình tiết tăng nặng" 92, "lỗi" 91. Các điều chung chung này chiếm 4 chỗ riêng, đẩy ra 16 điều đúng mà tuyến đã tìm ra (8 BLTTHS, 8 BLHS), ví dụ BLTTHS 155 ở câu "rút đơn yêu cầu khởi tố".
+- Đáp án tự động có nhiễu: luật sư hay nhắc BLTTHS 155 cho cả câu "giao cấu với người dưới 16 tuổi phạm tội gì".
 
 ## 10. Tham chiếu
 
