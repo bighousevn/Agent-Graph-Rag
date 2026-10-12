@@ -74,6 +74,22 @@ def test_annotate_never_gives_crime_to_test_cases():
     assert "dac_trung" not in cases[0]  # input not mutated
 
 
+def test_annotate_parallel_keeps_case_order():
+    import time
+
+    def slow_first(prompt):
+        if "d0" in prompt:
+            time.sleep(0.05)  # the first case answers last
+        return GOOD if "d1" not in prompt else "không phải JSON"
+
+    cases = [{"id": str(i), "dien_bien": f"d{i}", "toi_danh": [], "vai_tro": "test"} for i in range(4)]
+    seen = []
+    out = annotate_cases(cases, slow_first, use_crime_hint=False, workers=4, on_progress=seen.append)
+    assert [r["id"] for r in out] == ["0", "1", "2", "3"]
+    assert [r["dac_trung_loi"] for r in out] == [False, True, False, False]
+    assert sorted(seen) == [1, 2, 3, 4]
+
+
 def test_annotate_marks_parse_failures():
     out = annotate_cases(
         [{"id": "a", "dien_bien": "d", "toi_danh": [], "vai_tro": "corpus"}],

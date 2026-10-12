@@ -110,14 +110,20 @@ def annotate_cases(
     use_crime_hint: bool,
     max_chars: int = DEFAULT_MAX_CHARS,
     on_progress: Optional[Callable[[int], None]] = None,
+    workers: int = 1,
 ) -> List[Dict]:
     """Add ``dac_trung`` (features), ``mo_ta_dac_trung`` (embedded text)
     and ``dac_trung_loi`` (True when the answer could not be parsed).
 
     The crime hint is only ever given for corpus cases; a test case gets
-    facts only, whatever ``use_crime_hint`` says."""
-    out = []
-    for i, case in enumerate(cases):
+    facts only, whatever ``use_crime_hint`` says. With ``workers`` > 1 the
+    LLM calls run in parallel threads; rows stay in case order."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    cases = list(cases)
+    done = [0]
+
+    def annotate(case: Dict) -> Dict:
         hint = case.get("toi_danh") if use_crime_hint and case.get("vai_tro") == "corpus" else None
         features = parse_features(generate(build_prompt(case["dien_bien"], hint, max_chars)))
         if features is not None:
@@ -126,10 +132,15 @@ def annotate_cases(
         row["dac_trung"] = features or {k: [] for k in FEATURE_KEYS}
         row["dac_trung_loi"] = features is None
         row["mo_ta_dac_trung"] = concat_feature_description(row["dac_trung"])
-        out.append(row)
+        done[0] += 1
         if on_progress:
-            on_progress(i + 1)
-    return out
+            on_progress(done[0])
+        return row
+
+    if workers <= 1:
+        return [annotate(c) for c in cases]
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(annotate, cases))
 
 
 # ---- audit ---------------------------------------------------------------

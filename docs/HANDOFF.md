@@ -21,8 +21,8 @@ Tái hiện LegalGraphRAG (ACL 2026, PDF: <https://aclanthology.org/2026.acl-lon
 | **Hỏi–đáp** (phần mở rộng, bài báo không có) | `scripts/run_qa_pilot.py` | `vn_legal_graph/qa/` | Graph luật + tội + văn bản hướng dẫn; **không dùng án** (`--dung-an` để bật lại) |
 | **Hỏi án** (đoán tội từ bản án, bài của bài báo) | `scripts/run_case_pipeline.py` | `vn_legal_graph/judge/case_pipeline.py` | Như bài báo: Researcher → Auditor (kiểm tra từng yếu tố, lọc cứng) → Adjudicator (xem điều + án + tội) |
 
-- **Graph** (`outputs/hierargraph.pkl`, có trong git; Neo4j tuỳ chọn ở máy): 1.117 Law (BLHS 2025 hợp nhất 135/VBHN-VPQH, BLTTHS, Luật XLVPHC, NĐ 282), 315 Crime, 288 Case (ViCSR + anle.toaan.gov.vn), 9 Cluster; 294 đơn vị Công văn/Nghị quyết gắn vào điều luật. Xây ngày 2026-10-07 bằng deepseek-flash.
-- **Dữ liệu test**: hỏi–đáp 187 câu có đáp án chấm tự động (`data/raw/questions.xlsx`, 231 câu; 44 câu luật sư không trích BLHS/BLTTHS nên bỏ); hỏi án 55 án (`data/processed/cases_vn_test.json`, không có trong graph).
+- **Graph** (`outputs/hierargraph.pkl`, có trong git; Neo4j tuỳ chọn ở máy): 1.117 Law (BLHS 2025 hợp nhất 135/VBHN-VPQH, BLTTHS, Luật XLVPHC, NĐ 282), 315 Crime, **2.169 Case** (congbobanan 1.975 + anle 119 + ViCSR 75; 185 tội), **34 Cluster**; 294 đơn vị Công văn/Nghị quyết gắn vào điều luật. Dựng lại 2026-10-12 (mục 11.18): đặc trưng án và tóm tắt cụm bằng GPT-4o-mini. Graph cũ (288 Case, 9 Cluster) ở `data/processed/backup_truoc_cbba/` (không vào git).
+- **Dữ liệu test**: hỏi–đáp 187 câu có đáp án chấm tự động (`data/raw/questions.xlsx`, 231 câu; 44 câu luật sư không trích BLHS/BLTTHS nên bỏ); hỏi án **560 án / 112 tội** (5 án/tội như bài báo; `data/processed/cases_vn_test.json`, không có trong graph). Test cũ 55 án ở `backup_truoc_cbba/`; kết quả hỏi án lần 2/3 không so trực tiếp được với test mới.
 
 ### 0.2. Quyết định đã chốt (người dùng)
 
@@ -58,11 +58,11 @@ Tái hiện LegalGraphRAG (ACL 2026, PDF: <https://aclanthology.org/2026.acl-lon
 
 1. Lần 4 (hỏi–đáp không án) đã chạy, kết quả ở mục 11.13: ngang lần 3. Đã thêm bước diễn đạt lại câu hỏi và sửa tuyến vấn đề pháp lý (mục 11.14); lần 5 đã chạy (mục 11.15): tìm kiếm tốt hơn nhưng điểm cuối trong mức dao động. Sau đó: chống chép prompt (11.16), temperature 0 và phép thử xếp lại điều (11.17); chờ người dùng chạy `CHUC_NANG = 'hoi-dap-cau-sai-ab'`.
 3. Người dùng muốn **tập trung hỏi–đáp trước**, hỏi án làm sau.
-4. **Kho án mới (mục 11.13)**: cào congbobanan **xong 315/315 tội** (2026-10-12); bản xem trước kho 2.169 án / 185 tội, test 560 án / 112 tội (chưa ghi vào `data/processed/`, chờ người dùng) → `build_cases.py --congbobanan` → trích đặc trưng (GPT-4o-mini, dry-run trước) → `build_graph.py` → tóm tắt cụm → dựng lại → commit graph + án test + cache embedding.
+4. **Kho án mới xong (mục 11.13 "Cào án", 11.18):** graph và test 560 án đã commit. Người dùng chạy Kaggle `CHUC_NANG = 'hoi-an'` (lượt 4, như bài báo, ~122.000 lời gọi, ~10 giờ trên 2 GPU), sau đó `'hoi-an-khongtach'` (lượt 5) ở phiên riêng. Chưa đo truy xuất không LLM trên test mới (`evaluate_retrieval.py` chạy >1 giờ trên CPU, người dùng bỏ qua).
 
 ### 0.5. Cách chạy
 
-- Ở máy: `.venv/bin/python -m pytest tests/ -q` (160 passed, 1 skipped); `--dry-run` cho cả hai script.
+- Ở máy: `.venv/bin/python -m pytest tests/ -q` (180 passed, 1 skipped); `--dry-run` cho cả hai script.
 - Kaggle: import `notebooks/qwen_kaggle.ipynb` (import lại mỗi khi ô notebook đổi; code Python tự clone từ GitHub), GPU T4 x2, Internet On, chọn `CHUC_NANG`, Save & Run All. Output: `outputs/*.json`, `outputs/luot*.log`, `cache_llm.tar.gz`, `ollama*.log`. Chạy tiếp sau 12 giờ: thêm Output cũ làm Input. Tải từng file từ tab Output (CLI `kaggle kernels output` hay bị 429).
 - Chia một lượt cho nhiều GPU/notebook: `--shard K/N`, gộp bằng `--merge … --merge-out` (cả hai script).
 
@@ -1087,6 +1087,15 @@ So trên đúng 132 câu đó (lần 3 cũng chạy 132 câu này nhưng không 
 - Tín hiệu đo trên lần 5 (1.575 điều đưa cho Qwen): điều chỉ 1 tuyến tìm ra đúng 6%, 2 tuyến 35%, ≥3 tuyến 54%; judge "thỏa mãn" đúng 46%, "không thỏa mãn" 8%; vị trí 1-3 đúng 25%, 9-12 đúng 6%. Không cắt điều nào (nhóm 1 tuyến vẫn có 80 điều đúng, nhóm "không thỏa mãn" 109).
 - `--xep-lai` (`xep_theo_do_chac`, `order_by_confidence`): trong prompt trả lời, điều judge "thỏa mãn" trước, rồi theo số tuyến cùng tìm ra; mặc định tắt (thứ tự cũ: "thỏa mãn" trước, rồi theo thứ tự tuyến).
 - Notebook `CHUC_NANG = 'hoi-dap-cau-sai-ab'`: 132 câu sai của lần 4, lượt 6 (không xếp) rồi lượt 7 (`--xep-lai`, tag `causai_xep`) trên cùng GPU; lượt 7 dùng lại cache của 6, chỉ bước viết câu trả lời là mới.
+
+### 11.18. Dựng graph với kho congbobanan (2026-10-12, người dùng chọn chạy Kaggle ngay)
+
+- `build_cases.py --all-crimes --anle data/raw/anle/documents.parquet --congbobanan data/raw/congbobanan --corpus-max-per-crime 20 --test-per-crime 5 --test-min-cases 10` → kho 2.169 / test 560 (số liệu ở mục 11.13 "Cào án").
+- Trích đặc trưng GPT-4o-mini (`extract_case_features.py --workers 8`, thêm `--workers`): 2.729 án, 0 lỗi JSON; 2 án test không có "hành vi phạm tội". Bộ kiểm tra gắn cờ 7% án cbba (giá trị/thái độ không có trong văn bản): đọc mẫu thấy là lỗi diễn đạt do prompt viết cho tội tài sản ("tài sản trị giá 0 đồng", "tài sản trị giá 72 phần trăm tổn thương"), không phải bịa nặng.
+- Ép dùng OpenAI mà không đọc `.env`: `LLM_API_KEY= DEEPSEEK_API_KEY= LLM_PROVIDER=openai LLM_MODEL=gpt-4o-mini .venv/bin/python scripts/...` (`load_dotenv(override=False)` không ghi đè biến đã đặt, kể cả rỗng); kiểm tra bằng in `provider, model, base_url` của `AppConfig`.
+- `build_graph.py --extra-laws data/processed/law_bltths_vn.json data/processed/law_xlvphc_vn.json data/processed/law_nd282_vn.json` (6 phút CPU): 6.507 cạnh SIMILAR_TO, **63% nối hai án chung điều** (ghép ngẫu nhiên 0,9%); Louvain 34 cụm (16–220 án). Tóm tắt cụm GPT-4o-mini (34 lời gọi): mỗi cụm một nhóm tội riêng (thương tích, tham nhũng, thuế/hóa đơn, đánh bạc, ma túy, mại dâm, tiền giả, giao thông, rừng/động vật…), không còn trùng như các lần trước.
+- Dry-run hỏi án 560 án như bài báo: ~122.566 lời gọi (~368 triệu token vào). Log Ollama lần 3: ~6.000 lời gọi/giờ/GPU T4 → ~10 giờ cho lượt 4 trên 2 GPU. Notebook: `hoi-an` = lượt 4 chia đôi; `hoi-an-khongtach` = lượt 5 chia đôi (phiên riêng).
+- Test: 180 passed, 1 skipped.
 
 ## 10. Tham chiếu
 

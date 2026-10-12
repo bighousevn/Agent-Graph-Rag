@@ -27,3 +27,6 @@ data/raw/anle/
 !outputs/hierargraph.pkl
 !data/processed/cases_vn_test.json
 !.cache/emb/
+
+# congbobanan.toaan.gov.vn, tải lại được: python scripts/crawl_congbobanan.py
+data/raw/congbobanan/

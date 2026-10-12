@@ -63,6 +63,7 @@ def main() -> None:
     )
     parser.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
     parser.add_argument("--no-crime-hint", action="store_true")
+    parser.add_argument("--workers", type=int, default=1, help="Parallel LLM calls.")
     parser.add_argument("--dotenv-path", default=".env")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
@@ -120,7 +121,7 @@ def main() -> None:
     client = LLMClient(AppConfig.from_env_file(args.dotenv_path))
     for role, cases, dst in jobs:
         progress = lambda n, total=len(cases), role=role: print(f"\r{role}: {n}/{total}", end="", flush=True)
-        rows = annotate_cases(cases, client.generate, use_hint, args.max_chars, on_progress=progress)
+        rows = annotate_cases(cases, client.generate, use_hint, args.max_chars, on_progress=progress, workers=args.workers)
         print()
         with open(dst, "w", encoding="utf-8") as f:
             json.dump(rows, f, ensure_ascii=False, indent=2)
