@@ -38,7 +38,7 @@ import time
 import unicodedata
 from typing import Dict, List, Optional, Sequence
 
-from .anle import mask_short_names
+from .anle import mask_short_names, mask_subsequence_names
 from .build_cases import extract_dieu_khoan, extract_facts
 from .vicsr import (
     CRIME_NAME_ALIASES,
@@ -358,7 +358,7 @@ def record_from_text(
         "nguon": f"congbobanan.toaan.gov.vn#{judgment_id} ({meta.get('ban_an', '')})",
         "nam": meta.get("nam"),
         "bi_cao": "ẩn danh",
-        "dien_bien": mask_short_names(facts[0], crime_names),
+        "dien_bien": mask_subsequence_names(mask_short_names(facts[0], crime_names), crime_names),
         "dien_bien_nguon": facts[1],
         "toi_danh": [title[a] for a in articles],
         "dieu": [_article(a) for a in articles],

@@ -144,6 +144,44 @@ def mask_short_names(text: str, crime_names: Sequence[str]) -> str:
     return "".join(out)
 
 
+SUBSEQ_MIN_WORDS = 3
+SUBSEQ_MAX_WORDS = 20
+
+
+def _subseq_prefix(words: Sequence[str], name: Sequence[str]) -> int:
+    """How many leading ``words`` occur in ``name`` in the same order."""
+    n, i = 0, 0
+    for w in words[:SUBSEQ_MAX_WORDS]:
+        while i < len(name) and name[i] != w:
+            i += 1
+        if i == len(name):
+            break
+        n, i = n + 1, i + 1
+    return n
+
+
+def mask_subsequence_names(text: str, crime_names: Sequence[str]) -> str:
+    """Mask "tội" + 3 or more words that occur in order in one crime name:
+    courts drop words of long names ("tội tàng trữ lưu hành tiền giả" for
+    "làm tàng trữ vận chuyển lưu hành tiền giả ...", "tội bắt giữ người trái
+    pháp luật"). "tội phạm ..." ("tội phạm về ma túy") is the generic word,
+    not a name."""
+    names = [n.split() for n in crime_names]
+    words = text.split(" ")
+    out: List[str] = []
+    k = 0
+    while k < len(words):
+        out.append(words[k])
+        if words[k] == "tội" and k + 1 < len(words) and words[k + 1] not in ("××", "phạm"):
+            follow = words[k + 1 : k + 1 + SUBSEQ_MAX_WORDS]
+            n = max(_subseq_prefix(follow, name) for name in names)
+            if n >= SUBSEQ_MIN_WORDS:
+                out.append("××")
+                k += n
+        k += 1
+    return " ".join(out)
+
+
 def facts_of(doc: Dict, crime_names: Sequence[str]) -> Optional[str]:
     raw = raw_facts(doc.get("markdown") or "")
     if raw is None:
@@ -151,7 +189,7 @@ def facts_of(doc: Dict, crime_names: Sequence[str]) -> Optional[str]:
     facts = cut_facts(_norm_name(raw))
     if len(facts.split()) < MIN_FACT_WORDS:
         return None
-    return mask_short_names(mask_leaks(facts, crime_names), crime_names)
+    return mask_subsequence_names(mask_short_names(mask_leaks(facts, crime_names), crime_names), crime_names)
 
 
 def crime_names_from_law_json(laws: Sequence[Dict]) -> List[str]:

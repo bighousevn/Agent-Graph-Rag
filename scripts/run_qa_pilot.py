@@ -23,6 +23,7 @@ The system only ever sees title + question; the lawyer's answer is used
 for grading only.
 """
 import argparse
+import collections
 import json
 import os
 import re
@@ -182,6 +183,10 @@ def write_json(path, data) -> None:
 
 def report_all(results, args) -> None:
     report(results, "Tổng", args.auto_gold)
+    issues = [h for r in results for h in (r.get("truy_xuat") or {}).get("llm_van_de", [])]
+    if issues:
+        reasons = collections.Counter(h["bo"].split(":")[0] for h in issues if h.get("bo"))
+        print(f"Vấn đề pháp lý Qwen nêu: {len(issues)}, bị lọc: {dict(reasons) or 0}")
     if args.auto_gold:
         for nhom in ("co_cong_van", "khong_cong_van"):
             report([r for r in results if r["dap_an_chuan"]["nhom"] == nhom], nhom, True)

@@ -1,5 +1,5 @@
 """Tests for vn_legal_graph.cases.anle (criminal judgments from anle.toaan.gov.vn)."""
-from vn_legal_graph.cases.anle import cut_facts, decision_articles, facts_of, mask_short_names
+from vn_legal_graph.cases.anle import cut_facts, decision_articles, facts_of, mask_short_names, mask_subsequence_names
 
 INTRO = " ".join(["khoảng 22 giờ ngày 5 3 2021 nguyễn văn a dùng dao đâm anh b nhiều nhát"] * 4)
 MD = (
@@ -35,3 +35,12 @@ def test_mask_short_crime_names():
     names = ["cố ý gây thương tích hoặc gây tổn hại cho sức khỏe của người khác", "hủy hoại hoặc cố ý làm hư hỏng tài sản"]
     text = "yêu cầu khởi tố về tội cố ý gây thương tích và tội cố ý làm hư hỏng tài sản của anh b"
     assert mask_short_names(text, names) == "yêu cầu khởi tố về tội ×× và tội ×× của anh b"
+
+
+def test_mask_names_with_dropped_words():
+    names = ["làm tàng trữ vận chuyển lưu hành tiền giả", "bắt giữ hoặc giam người trái pháp luật", "hủy hoại hoặc cố ý làm hư hỏng tài sản"]
+    text = "khởi tố về tội tàng trữ lưu hành tiền giả ngày 23 9 và tội bắt giữ người trái pháp luật đối với anh b"
+    assert mask_subsequence_names(text, names) == "khởi tố về tội ×× ngày 23 9 và tội ×× đối với anh b"
+    # the generic "tội phạm", two-word runs and masked names stay as they are
+    kept = "các tội phạm về ma túy tội hủy hoại xảy ra và tội ×× tàng trữ"
+    assert mask_subsequence_names(kept, names) == kept

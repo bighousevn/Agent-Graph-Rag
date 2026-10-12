@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -225,6 +226,69 @@ def general_title_index(g: HierarGraph, embed: Embed) -> List[Tuple[str, np.ndar
     return index
 
 
+def _words(text: str) -> List[str]:
+    return re.findall(r"\w+", (text or "").lower())
+
+
+def _grams(text: str, n: int = 3) -> set:
+    w = _words(text)
+    return {" ".join(w[i : i + n]) for i in range(len(w) - n + 1)}
+
+
+# Names of the codes and of liability itself are ordinary words in a legal
+# issue, not a sign of copying.
+LAW_NAME_GRAMS = set().union(*(_grams(t) for t in (
+    "bộ luật hình sự", "bộ luật tố tụng hình sự", "trách nhiệm hình sự", "vụ án hình sự", "tố tụng hình sự",
+)))
+
+
+def copied_from_prompt(item: str, template: str, source: str) -> List[str]:
+    """3-word phrases of item that occur in the prompt's own text (the
+    template, before the question) but not in source (question + rewrite):
+    the model repeated the instructions instead of reading the question.
+    Qwen3-8B did it in every run (example articles, example issues, then
+    the wording of the issue definition)."""
+    fixed = template.split("{")[0]
+    return sorted((_grams(item) & _grams(fixed)) - _grams(source) - LAW_NAME_GRAMS)
+
+
+def parse_issues(text: str) -> List[Dict[str, str]]:
+    """[{"van_de", "trich"}] from LEGAL_ISSUES_PROMPT; a plain list of
+    strings is accepted with an empty "trich"."""
+    first, last = text.find("["), text.rfind("]")
+    if first == -1 or last < first:
+        return []
+    try:
+        data = json.loads(text[first : last + 1])
+    except json.JSONDecodeError:
+        return [{"van_de": x, "trich": ""} for x in parse_crime_list(text)]
+    out = []
+    for x in data if isinstance(data, list) else []:
+        if isinstance(x, dict) and str(x.get("van_de", "")).strip():
+            out.append({"van_de": str(x["van_de"]).strip(), "trich": str(x.get("trich", "")).strip()})
+        elif isinstance(x, str) and x.strip():
+            out.append({"van_de": x.strip(), "trich": ""})
+    return out
+
+
+def grounded_issues(issues: List[Dict[str, str]], source: str, template: str, min_overlap: float = 0.7) -> Tuple[List[str], List[Dict]]:
+    """Keep an issue only if its quote is (mostly) words of the question and
+    its name repeats no phrase of the prompt that the question lacks.
+    Returns (kept names, dropped with the reason)."""
+    src = set(_words(source))
+    kept, dropped = [], []
+    for it in issues:
+        quote = _words(it["trich"])
+        copied = copied_from_prompt(it["van_de"], template, source)
+        if not quote or sum(w in src for w in quote) / len(quote) < min_overlap:
+            dropped.append({**it, "ly_do": "trích dẫn không có trong câu hỏi"})
+        elif copied:
+            dropped.append({**it, "ly_do": "chép chữ của prompt: " + ", ".join(copied)})
+        else:
+            kept.append(it["van_de"])
+    return kept, dropped
+
+
 def rewrite_question(question: str, generate: Generate) -> str:
     """The question in legal language (QA_REWRITE_PROMPT), or "" if empty."""
     text = generate(QA_REWRITE_PROMPT.format(question=question), max_tokens=256).strip()
@@ -242,7 +306,9 @@ def llm_issue_laws(
     first (Kaggle run 4: "độ tuổi chịu trách nhiệm hình sự" in 146/187
     questions pushed out 16 right articles)."""
     prompt = LEGAL_ISSUES_PROMPT.format(question=question, rewrite=rewrite or question)
-    issues = parse_crime_list(generate(prompt, max_tokens=128))
+    issues, dropped = grounded_issues(
+        parse_issues(generate(prompt, max_tokens=512)), f"{question} {rewrite}", LEGAL_ISSUES_PROMPT
+    )
     index = general_title_index(g, embed)
     laws: List[str] = []
     hits = []
@@ -260,6 +326,7 @@ def llm_issue_laws(
         title_vec = dict(index)
         r = _unit(rank_vec)
         laws.sort(key=lambda n: -float(title_vec[n] @ r))
+    hits += [{"van_de": d["van_de"], "bo": d["ly_do"], "trich": d["trich"]} for d in dropped]
     return laws, hits
 
 

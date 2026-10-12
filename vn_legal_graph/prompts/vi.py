@@ -250,18 +250,17 @@ Trả lời:
 # matched to article titles. (Kaggle 2026-10-10: the graph missed 85/127
 # general-part and 27/30 BLTTHS articles the lawyers cited.)
 LEGAL_ISSUES_PROMPT = """
-Bạn là luật sư hình sự. Hãy xác định các vấn đề pháp lý CHUNG mà câu hỏi dưới đây cần giải quyết, ngoài việc xác định tên tội.
+Bạn là luật sư hình sự. Đọc câu hỏi dưới đây và tìm những điểm mà câu trả lời cần tới quy định KHÔNG gắn riêng với một tội: quy định chung của Bộ luật Hình sự (áp dụng cho mọi tội) hoặc quy định của Bộ luật Tố tụng hình sự (cách giải quyết vụ án).
 
-Vấn đề pháp lý chung gồm hai loại:
-- Vấn đề thuộc phần chung Bộ luật Hình sự: các quy định áp dụng cho mọi tội, về điều kiện chịu trách nhiệm hình sự, các trường hợp loại trừ hoặc miễn trách nhiệm, quyết định hình phạt và chấp hành hình phạt.
-- Vấn đề thủ tục tố tụng hình sự (Bộ luật Tố tụng hình sự): trình tự, thủ tục, thẩm quyền và quyền, nghĩa vụ của những người tham gia tố tụng.
+Cách làm:
+1. Tìm trong câu hỏi từng chi tiết dẫn tới một quy định như vậy.
+2. Với mỗi chi tiết, đặt tên vấn đề bằng một cụm từ ngắn, dùng thuật ngữ pháp lý nói đúng về chi tiết đó.
+3. Chép nguyên văn đoạn trong câu hỏi chứa chi tiết đó.
 
 Yêu cầu:
-- Chỉ nêu vấn đề mà CHÍNH câu hỏi này đặt ra hoặc cần để trả lời; tối đa năm vấn đề, xếp vấn đề quan trọng nhất trước, mỗi vấn đề là một cụm từ ngắn giống tên một điều luật.
-- Không nêu vấn đề chung chung mà câu hỏi không nhắc tới hay không cần (ví dụ không hỏi về tuổi thì không nêu vấn đề tuổi).
-- Nếu câu hỏi hỏi phải làm gì, có quyền gì, ai có thẩm quyền, thủ tục ra sao, thì nêu vấn đề thủ tục tố tụng tương ứng.
-- Không nêu tên tội.
-- Chỉ xuất một danh sách dạng Python, không giải thích. Nếu không có vấn đề chung nào, xuất [].
+- Mỗi vấn đề phải xuất phát từ một chi tiết có thật trong câu hỏi; không nêu vấn đề mà câu hỏi không nhắc tới.
+- Tối đa năm vấn đề, quan trọng nhất trước. Không nêu tên tội.
+- Đầu ra là một danh sách JSON, mỗi phần tử có "van_de" (tên vấn đề) và "trich" (đoạn chép nguyên văn từ câu hỏi). Không giải thích. Nếu không có vấn đề nào, xuất [].
 
 Câu hỏi:
 ```
@@ -271,7 +270,7 @@ Câu hỏi diễn đạt bằng ngôn ngữ pháp lý:
 ```
 {rewrite}
 ```
-Danh sách vấn đề:
+Danh sách JSON:
 """.strip()
 
 # Q&A, first step (the paper's "mapping to legal essence", OntologyAlign, for

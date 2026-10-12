@@ -87,8 +87,8 @@ def test_answer_question_end_to_end_with_fake_llm():
             return '{"criminal_acts": ["đánh bạc qua app"]}'
         if "tối đa ba tội danh" in prompt:
             return '["Tội đánh bạc"]'
-        if "vấn đề pháp lý CHUNG" in prompt:
-            return '["tình tiết giảm nhẹ"]'
+        if "KHÔNG gắn riêng với một tội" in prompt:
+            return '[{"van_de": "tình tiết giảm nhẹ", "trich": "Đánh bạc qua app"}]'
         if "Các yếu tố cần xét" in prompt:
             return '{"1": true}'
         if "Yếu tố thỏa mãn" in prompt:
@@ -218,8 +218,8 @@ def test_general_slots_are_added_after_other_candidates():
     def fake(prompt, max_tokens=None):
         if "tối đa ba tội danh" in prompt:
             return '["Tội trộm cắp tài sản", "Tội đánh bạc"]'
-        if "vấn đề pháp lý CHUNG" in prompt:
-            return '["án treo", "Tội trộm cắp tài sản"]'
+        if "KHÔNG gắn riêng với một tội" in prompt:
+            return '[{"van_de": "án treo", "trich": "hưởng án treo"}, {"van_de": "Tội trộm cắp tài sản", "trich": "Trộm xe"}]'
         return "[]"
 
     q = "Trộm xe có được hưởng án treo không?"
@@ -260,8 +260,8 @@ def test_qa_mode_skips_cases_and_features_by_default():
             return "Hành vi đánh bạc trái phép có bị phạt tù không."
         if "tối đa ba tội danh" in prompt:
             return '["Tội đánh bạc"]'
-        if "vấn đề pháp lý CHUNG" in prompt:
-            assert "tối đa năm vấn đề" in prompt and "thủ tục tố tụng hình sự" in prompt
+        if "KHÔNG gắn riêng với một tội" in prompt:
+            assert "Tối đa năm vấn đề" in prompt and "Bộ luật Tố tụng hình sự" in prompt
             assert "Hành vi đánh bạc trái phép có bị phạt tù không." in prompt  # the rewrite is passed on
             return "[]"
         if "luật sư tư vấn" in prompt:
@@ -295,8 +295,34 @@ def test_issue_laws_ranked_by_closeness_to_the_question():
     laws = LAWS + [{"id": 12, "suffix": "", "title": "Tuổi chịu trách nhiệm hình sự", "items": [{"text": "Điều 12.", "crime": [],
                     "judge_dep": [], "related_laws": []}]}]
     g, _ = build_base_graph(laws, [], embed)
-    fake = lambda p, max_tokens=None: '["tuổi chịu trách nhiệm hình sự", "tình tiết giảm nhẹ"]'
+    fake = lambda p, max_tokens=None: ('[{"van_de": "tuổi chịu trách nhiệm hình sự", "trich": "q"}, '
+                                       '{"van_de": "tình tiết giảm nhẹ", "trich": "q"}]')
     in_order, _ = llm_issue_laws(g, "q", fake, embed, 1)
     assert in_order == ["law:12", "law:51"]  # as the LLM listed them
     ranked, _ = llm_issue_laws(g, "q", fake, embed, 1, rank_vec=embed("có được giảm nhẹ không"))
     assert ranked == ["law:51", "law:12"]  # the title closest to the question first
+
+
+def test_issues_must_quote_the_question_and_not_repeat_the_prompt():
+    from vn_legal_graph.prompts.vi import LEGAL_ISSUES_PROMPT
+    from vn_legal_graph.qa.pipeline import copied_from_prompt, grounded_issues, parse_issues
+
+    q = "Bị hại đã rút đơn yêu cầu khởi tố thì có được yêu cầu lại không?"
+    raw = ('[{"van_de": "rút yêu cầu khởi tố", "trich": "Bị hại đã rút đơn yêu cầu khởi tố"},'
+           ' {"van_de": "tuổi chịu trách nhiệm hình sự", "trich": "người dưới 16 tuổi"},'
+           ' {"van_de": "quy định chung của Bộ luật Hình sự", "trich": "có được yêu cầu lại"}]')
+    kept, dropped = grounded_issues(parse_issues(raw), q, LEGAL_ISSUES_PROMPT)
+    assert kept == ["rút yêu cầu khởi tố"]
+    assert dropped[0]["ly_do"] == "trích dẫn không có trong câu hỏi"  # invented detail
+    assert dropped[1]["ly_do"].startswith("chép chữ của prompt")  # repeats the instructions
+    assert copied_from_prompt("rút yêu cầu khởi tố", LEGAL_ISSUES_PROMPT, q) == []
+    assert parse_issues('["án treo"]') == [{"van_de": "án treo", "trich": ""}]
+
+
+def test_law_names_are_not_counted_as_copying():
+    from vn_legal_graph.prompts.vi import LEGAL_ISSUES_PROMPT
+    from vn_legal_graph.qa.pipeline import copied_from_prompt
+
+    q = "Bị hại có được xem hồ sơ vụ án không?"
+    assert copied_from_prompt("quyền của bị hại trong tố tụng hình sự", LEGAL_ISSUES_PROMPT, q) == []
+    assert copied_from_prompt("quy định chung của Bộ luật Hình sự", LEGAL_ISSUES_PROMPT, q) != []

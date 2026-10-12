@@ -1075,6 +1075,12 @@ So trên đúng 132 câu đó (lần 3 cũng chạy 132 câu này nhưng không 
 - Qwen lại chép chữ trong phần mô tả của `LEGAL_ISSUES_PROMPT`: "điều kiện chịu trách nhiệm hình sự" 36/132 câu, "trường hợp loại trừ trách nhiệm hình sự" 14.
 - Chỗ mất điểm vẫn là bước Qwen trích điều trong câu trả lời. Qwen chạy với temperature 0,1 nên mỗi lần chạy dao động; so sánh giữa các lần cần chạy đủ 187 câu hoặc đặt temperature 0.
 
+### 11.16. Chống Qwen chép chữ của prompt (2026-10-12, người dùng yêu cầu)
+
+- Đo lần 5 (cụm 3 từ của đầu ra có trong prompt mà không có trong câu hỏi): diễn đạt lại 0; đoán tội 8 tên dính "Bộ luật Hình sự" (vô hại); vấn đề pháp lý chép nặng ("điều kiện chịu trách nhiệm hình sự" 73 cụm, "trường hợp loại trừ" 14).
+- Ba lớp: (1) `LEGAL_ISSUES_PROMPT` viết lại không còn cụm danh từ để chép, chỉ mô tả cách làm; (2) mỗi vấn đề phải kèm `trich` = đoạn chép nguyên văn từ câu hỏi, đầu ra JSON `[{"van_de", "trich"}]` (`parse_issues`); (3) `grounded_issues` bỏ vấn đề có trích dẫn < 70% từ nằm trong câu hỏi + câu diễn đạt lại, hoặc có cụm 3 từ của prompt mà câu hỏi không có (`copied_from_prompt`, trừ tên luật `LAW_NAME_GRAMS`). Vấn đề bị bỏ ghi trong `llm_van_de` với `bo`; `run_qa_pilot.py` in số bị lọc theo lý do.
+- Thử bộ lọc chép trên 660 vấn đề của lần 5 (với prompt lần 5): lọc 135 (36 "điều kiện chịu trách nhiệm hình sự", 14 "trường hợp loại trừ…").
+
 ## 10. Tham chiếu
 
 - Sơ đồ tiến độ và kiến trúc truy vấn: <https://claude.ai/artifact/BMLpjNNcp1J9sgwnoyUX11> (artifact riêng của người dùng). Lưu ý: sơ đồ truy vấn trong đó còn thiếu 2 bước đã nêu ở mục 4.2.
