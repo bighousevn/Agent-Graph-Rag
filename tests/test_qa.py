@@ -81,6 +81,8 @@ def test_answer_question_end_to_end_with_fake_llm():
 
     def fake(prompt, max_tokens=None):
         calls.append(prompt[:40])
+        if "diễn đạt lại câu hỏi của người dân" in prompt:
+            return "Hành vi đánh bạc trái phép bằng ứng dụng với số tiền 40 triệu đồng có cấu thành tội đánh bạc không."
         if "Nhân thân bị cáo" in prompt and "JSON" in prompt and "Diễn biến vụ án" in prompt:
             return '{"criminal_acts": ["đánh bạc qua app"]}'
         if "tối đa ba tội danh" in prompt:
@@ -254,16 +256,20 @@ def test_qa_mode_skips_cases_and_features_by_default():
     def fake(prompt, max_tokens=None):
         asked.append(prompt)
         assert "Nhân thân bị cáo" not in prompt and "nhóm tội phạm" not in prompt and "vụ án tương tự" not in prompt
+        if "diễn đạt lại câu hỏi của người dân" in prompt:
+            return "Hành vi đánh bạc trái phép có bị phạt tù không."
         if "tối đa ba tội danh" in prompt:
             return '["Tội đánh bạc"]'
         if "vấn đề pháp lý CHUNG" in prompt:
-            assert "tối đa năm vấn đề" in prompt and "Thủ tục tố tụng hình sự" in prompt
+            assert "tối đa năm vấn đề" in prompt and "thủ tục tố tụng hình sự" in prompt
+            assert "Hành vi đánh bạc trái phép có bị phạt tù không." in prompt  # the rewrite is passed on
             return "[]"
         if "luật sư tư vấn" in prompt:
             return '{"cau_tra_loi": "' + " ".join(["x"] * 50) + '", "dieu_luat": []}'
         return "true"
 
     out = answer_question(g, "Đánh bạc có bị tù không?", fake, fake_embed)
+    assert out["dien_dat_lai"] == "Hành vi đánh bạc trái phép có bị phạt tù không."
     assert out["dac_trung"] == "" and not any(k in out["truy_xuat"]["tuyen"] for k in ("truc_tiep", "qua_cum", "an_tuong_tu"))
     with_cases = retrieve_candidates(g, "q", fake_embed("q"), lambda p, max_tokens=None: "[]", fake_embed, {**DEFAULTS, "dung_an": True})
     assert "truc_tiep" in with_cases["tuyen"]
@@ -278,3 +284,19 @@ def test_crime_route_takes_two_nearest_crime_nodes():
     one, _ = llm_crime_laws(g, "x", lambda p, max_tokens=None: '["Tội đánh bạc"]', fake_embed)
     two, hits = llm_crime_laws(g, "x", lambda p, max_tokens=None: '["Tội đánh bạc"]', fake_embed, 2)
     assert len(one) == 1 and set(two) == {"law:321", "law:322"} and len(hits) == 2
+
+
+def test_issue_laws_ranked_by_closeness_to_the_question():
+    from vn_legal_graph.qa.pipeline import llm_issue_laws
+
+    def embed(text):  # tuổi -> x, giảm nhẹ -> y
+        return np.array([1.0 if "uổi" in text else 0.0, 1.0 if "giảm nhẹ" in text else 0.0, 0.1])
+
+    laws = LAWS + [{"id": 12, "suffix": "", "title": "Tuổi chịu trách nhiệm hình sự", "items": [{"text": "Điều 12.", "crime": [],
+                    "judge_dep": [], "related_laws": []}]}]
+    g, _ = build_base_graph(laws, [], embed)
+    fake = lambda p, max_tokens=None: '["tuổi chịu trách nhiệm hình sự", "tình tiết giảm nhẹ"]'
+    in_order, _ = llm_issue_laws(g, "q", fake, embed, 1)
+    assert in_order == ["law:12", "law:51"]  # as the LLM listed them
+    ranked, _ = llm_issue_laws(g, "q", fake, embed, 1, rank_vec=embed("có được giảm nhẹ không"))
+    assert ranked == ["law:51", "law:12"]  # the title closest to the question first

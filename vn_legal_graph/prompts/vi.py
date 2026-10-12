@@ -253,12 +253,13 @@ LEGAL_ISSUES_PROMPT = """
 Bạn là luật sư hình sự. Hãy xác định các vấn đề pháp lý CHUNG mà câu hỏi dưới đây cần giải quyết, ngoài việc xác định tên tội.
 
 Vấn đề pháp lý chung gồm hai loại:
-- Phần chung Bộ luật Hình sự: như độ tuổi chịu trách nhiệm hình sự, lỗi, phòng vệ chính đáng, đồng phạm, chuẩn bị phạm tội, tình tiết giảm nhẹ, tình tiết tăng nặng, án treo, thời hiệu, miễn trách nhiệm hình sự, án tích.
-- Thủ tục tố tụng hình sự (Bộ luật Tố tụng hình sự): như khởi tố theo yêu cầu bị hại, rút yêu cầu khởi tố, tố giác và tin báo tội phạm, tạm giữ, tạm giam, quyền và nghĩa vụ của bị can, bị cáo, bị hại, người bào chữa, thẩm quyền điều tra hoặc xét xử, xét xử vắng mặt, kháng cáo.
+- Vấn đề thuộc phần chung Bộ luật Hình sự: các quy định áp dụng cho mọi tội, về điều kiện chịu trách nhiệm hình sự, các trường hợp loại trừ hoặc miễn trách nhiệm, quyết định hình phạt và chấp hành hình phạt.
+- Vấn đề thủ tục tố tụng hình sự (Bộ luật Tố tụng hình sự): trình tự, thủ tục, thẩm quyền và quyền, nghĩa vụ của những người tham gia tố tụng.
 
 Yêu cầu:
-- Chỉ nêu vấn đề mà câu hỏi thật sự cần để trả lời; tối đa năm vấn đề, mỗi vấn đề là một cụm từ ngắn giống tên một điều luật.
-- Nếu câu hỏi hỏi về việc phải làm gì, quyền gì, ai có thẩm quyền, thủ tục ra sao, phải nêu cả vấn đề thủ tục tố tụng.
+- Chỉ nêu vấn đề mà CHÍNH câu hỏi này đặt ra hoặc cần để trả lời; tối đa năm vấn đề, xếp vấn đề quan trọng nhất trước, mỗi vấn đề là một cụm từ ngắn giống tên một điều luật.
+- Không nêu vấn đề chung chung mà câu hỏi không nhắc tới hay không cần (ví dụ không hỏi về tuổi thì không nêu vấn đề tuổi).
+- Nếu câu hỏi hỏi phải làm gì, có quyền gì, ai có thẩm quyền, thủ tục ra sao, thì nêu vấn đề thủ tục tố tụng tương ứng.
 - Không nêu tên tội.
 - Chỉ xuất một danh sách dạng Python, không giải thích. Nếu không có vấn đề chung nào, xuất [].
 
@@ -266,7 +267,32 @@ Câu hỏi:
 ```
 {question}
 ```
+Câu hỏi diễn đạt bằng ngôn ngữ pháp lý:
+```
+{rewrite}
+```
 Danh sách vấn đề:
+""".strip()
+
+# Q&A, first step (the paper's "mapping to legal essence", OntologyAlign, for
+# a question instead of a judgment): people ask in everyday words, the law
+# is written in legal terms, so the question is restated in legal language
+# and that text drives the vector searches and the LLM guesses.
+QA_REWRITE_PROMPT = """
+Bạn là luật sư hình sự. Hãy diễn đạt lại câu hỏi của người dân dưới đây bằng ngôn ngữ pháp lý hình sự, để tra cứu Bộ luật Hình sự và Bộ luật Tố tụng hình sự.
+
+Yêu cầu:
+- Giữ đủ mọi tình tiết trong câu hỏi: ai làm gì, với ai, hậu quả, số tiền, khối lượng, độ tuổi, quan hệ giữa các bên, giai đoạn tố tụng.
+- Thay từ ngữ đời thường bằng thuật ngữ mà Bộ luật Hình sự và Bộ luật Tố tụng hình sự dùng để gọi hành vi, chủ thể, hậu quả và thủ tục đó.
+- Nêu rõ câu hỏi muốn biết điều gì (có phạm tội không, tội gì, khung hình phạt nào, thủ tục hay quyền gì).
+- Không thêm tình tiết không có trong câu hỏi; không trả lời, không kết luận; không ghi số điều luật.
+- Chỉ xuất đoạn diễn đạt lại, 1 đến 3 câu, không thêm lời dẫn.
+
+Câu hỏi:
+```
+{question}
+```
+Diễn đạt lại:
 """.strip()
 
 # Replaces judge_crime_all for Q&A: the answer, plus crimes and articles in a

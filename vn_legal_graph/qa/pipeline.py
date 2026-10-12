@@ -35,6 +35,7 @@ from ..judge.judge_law import judge_law, parse_bool
 from ..prompts.vi import (
     JUDGE_LAW_SIMPLE_PROMPT,
     LEGAL_ISSUES_PROMPT,
+    QA_REWRITE_PROMPT,
     QA_ANSWER_NO_DOCS_PROMPT,
     QA_ANSWER_PROMPT,
     QA_ANSWER_TOO_SHORT_NOTE,
@@ -69,6 +70,9 @@ DEFAULTS = {
     # (0 found only by it), at 3 extra LLM calls per question. True brings
     # the case routes (and the feature extraction they need) back.
     "dung_an": False,
+    # Restate the question in legal language first and search with that
+    # (people's words rarely match the statute's).
+    "dien_dat_lai": True,
     # An answer shorter than this (words) is asked again once.
     "min_answer_words": 40,
     "judge_mode": "gop",
@@ -221,12 +225,24 @@ def general_title_index(g: HierarGraph, embed: Embed) -> List[Tuple[str, np.ndar
     return index
 
 
+def rewrite_question(question: str, generate: Generate) -> str:
+    """The question in legal language (QA_REWRITE_PROMPT), or "" if empty."""
+    text = generate(QA_REWRITE_PROMPT.format(question=question), max_tokens=256).strip()
+    return text.strip("`").strip()
+
+
 def llm_issue_laws(
-    g: HierarGraph, question: str, generate: Generate, embed: Embed, per_issue: int, max_issues: int = 5
+    g: HierarGraph, question: str, generate: Generate, embed: Embed, per_issue: int, max_issues: int = 5,
+    rewrite: str = "", rank_vec=None,
 ) -> Tuple[List[str], List[Dict]]:
     """The LLM names <=max_issues general legal issues; each goes to the general
-    articles whose titles are closest."""
-    issues = parse_crime_list(generate(LEGAL_ISSUES_PROMPT.format(question=question), max_tokens=128))
+    articles whose titles are closest. With rank_vec, the articles found are
+    ordered by how close their titles are to it (the restated question), so
+    an issue the LLM named out of habit does not take the reserved slots
+    first (Kaggle run 4: "độ tuổi chịu trách nhiệm hình sự" in 146/187
+    questions pushed out 16 right articles)."""
+    prompt = LEGAL_ISSUES_PROMPT.format(question=question, rewrite=rewrite or question)
+    issues = parse_crime_list(generate(prompt, max_tokens=128))
     index = general_title_index(g, embed)
     laws: List[str] = []
     hits = []
@@ -240,6 +256,10 @@ def llm_issue_laws(
         for n, _ in ranked:
             if n not in laws:
                 laws.append(n)
+    if rank_vec is not None and laws:
+        title_vec = dict(index)
+        r = _unit(rank_vec)
+        laws.sort(key=lambda n: -float(title_vec[n] @ r))
     return laws, hits
 
 
@@ -282,8 +302,11 @@ def reranked_cases(g: HierarGraph, query_vec, query_text: str, generate: Generat
 
 
 def retrieve_candidates(
-    g: HierarGraph, question: str, query_vec, generate: Generate, embed: Embed, cfg: Dict, query_text: str = ""
+    g: HierarGraph, question: str, query_vec, generate: Generate, embed: Embed, cfg: Dict, query_text: str = "",
+    rewrite: str = "",
 ) -> Dict:
+    """rewrite: the question in legal language; the LLM guesses read both,
+    the vector searches use the rewrite when there is one."""
     routes: Dict[str, List[str]] = {}
     rerank = None
     if not cfg["dung_an"]:
@@ -295,14 +318,15 @@ def retrieve_candidates(
         routes["truc_tiep"] = laws_of_cases(g, direct_cases(g, query_vec, cfg["top_k_cases"]))
         routes["qua_cum"] = laws_of_cases(g, cluster_cases(g, query_vec, cfg["n_clusters"], cfg["top_k_cases"]))
 
-    routes["llm_doan_toi"], crime_hits = llm_crime_laws(g, question, generate, embed, cfg["crime_nodes_per_guess"])
-    question_vec = embed(question)
+    guess_text = f"{question}\nDiễn đạt pháp lý: {rewrite}" if rewrite else question
+    routes["llm_doan_toi"], crime_hits = llm_crime_laws(g, guess_text, generate, embed, cfg["crime_nodes_per_guess"])
+    question_vec = embed(rewrite or question)
     routes["van_ban_luat"] = [n for n, _ in g.search(question_vec, "Law", top_k=cfg["top_k_laws_text"])]
     routes["huong_dan"] = guidance_laws(g, question_vec, embed, cfg["top_k_guidance"])
     issue_hits: List[Dict] = []
     if cfg["general_slots"]:
         routes["van_de_phap_ly"], issue_hits = llm_issue_laws(
-            g, question, generate, embed, cfg["laws_per_issue"], cfg["max_issues"]
+            g, question, generate, embed, cfg["laws_per_issue"], cfg["max_issues"], rewrite, question_vec
         )
 
     order = ["llm_doan_toi", "huong_dan", "van_ban_luat", "an_tuong_tu", "truc_tiep", "qua_cum"]
@@ -376,6 +400,7 @@ def answer_question(
     g: HierarGraph, question: str, generate: Generate, embed: Embed, cfg: Optional[Dict] = None
 ) -> Dict:
     cfg = {**DEFAULTS, **(cfg or {})}
+    rewrite = rewrite_question(question, generate) if cfg["dien_dat_lai"] else ""
     description = ""
     if cfg["dung_an"]:  # features only serve the case routes
         features = parse_features(generate(build_prompt(question)))
@@ -383,7 +408,7 @@ def answer_question(
         description = concat_feature_description(features) if features else ""
     query_vec = embed(description or question)
 
-    retrieval = retrieve_candidates(g, question, query_vec, generate, embed, cfg, description)
+    retrieval = retrieve_candidates(g, question, query_vec, generate, embed, cfg, description, rewrite)
     judgments = {n: judge_candidate(g, n, question, generate, cfg["judge_mode"]) for n in retrieval["ung_vien"]}
     accepted = [n for n in retrieval["ung_vien"] if judgments[n]["ap_dung"]]
     fallback = not accepted
@@ -397,6 +422,7 @@ def answer_question(
     )
     raw, answer, retried = answer_with_retry(prompt, generate, cfg["min_answer_words"])
     return {
+        "dien_dat_lai": rewrite,
         "dac_trung": description,
         "truy_xuat": {**retrieval, "ung_vien": [law_label(g, n) for n in retrieval["ung_vien"]],
                       "tuyen": {k: [law_label(g, n) for n in v] for k, v in retrieval["tuyen"].items()}},

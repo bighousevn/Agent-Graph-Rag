@@ -56,9 +56,9 @@ Tái hiện LegalGraphRAG (ACL 2026, PDF: <https://aclanthology.org/2026.acl-lon
 
 ### 0.4. Đang chờ / việc tiếp theo
 
-1. Lần 4 (hỏi–đáp không án) đã chạy, kết quả ở mục 11.13: ngang lần 3. Việc kế: sửa tuyến vấn đề pháp lý (Qwen chép danh sách ví dụ trong prompt, các điều chung chung chiếm hết chỗ riêng).
+1. Lần 4 (hỏi–đáp không án) đã chạy, kết quả ở mục 11.13: ngang lần 3. Đã thêm bước diễn đạt lại câu hỏi và sửa tuyến vấn đề pháp lý (mục 11.14); chờ người dùng chạy Kaggle `CHUC_NANG = 'hoi-dap-cau-sai'` (132 câu sai của lần 4), rồi so với chính 132 câu đó ở lần 4.
 3. Người dùng muốn **tập trung hỏi–đáp trước**, hỏi án làm sau.
-4. **Kho án mới (mục 11.13)**: cào congbobanan xong → `build_cases.py --congbobanan` → trích đặc trưng (GPT-4o-mini, dry-run trước) → `build_graph.py` → tóm tắt cụm → dựng lại → commit graph + án test + cache embedding.
+4. **Kho án mới (mục 11.13)**: cào congbobanan **đang dừng ở 147/315 tội** (người dùng dừng 2026-10-11, xong tới Điều 254), chạy tiếp bằng `.venv/bin/python -u scripts/crawl_congbobanan.py >> data/raw/congbobanan/crawl.log 2>&1` (tự bỏ qua tội đã xong) → `build_cases.py --congbobanan` → trích đặc trưng (GPT-4o-mini, dry-run trước) → `build_graph.py` → tóm tắt cụm → dựng lại → commit graph + án test + cache embedding.
 
 ### 0.5. Cách chạy
 
@@ -1026,6 +1026,11 @@ Cấu hình: prompt không còn ví dụ, trả lời 80-200 từ, tuyến `van_
 - `scripts/build_cases.py --congbobanan data/raw/congbobanan`.
 - Test: `tests/test_congbobanan.py` (HTML chép theo markup thật, client giả).
 
+**Tiến độ khi dừng (2026-10-11, sau 4 giờ 54 phút, Điều 108–254):** 147/315 tội; 2.065 án sơ thẩm có chữ, 1.789 PDF ảnh quét (~46%), 212 lỗi tải; 3.895 file trong `txt/`, 5.890 dòng `listings.jsonl` (69 MB). Theo tội: đủ 30 án 53 tội, 25–29: 2, 10–24: 18, 1–9: 42, 0 án: 32 (chủ yếu tội an ninh quốc gia và tội hiếm). Tốc độ ~2 phút/tội → còn ~5,5 giờ. Ước tính khi xong: ~4.000–4.500 án có chữ, ~110–120 tội đủ quota → kho ~3.000 án, test ~600 án (chưa kiểm chứng; số thật sau `build_cases.py`).
+- Dừng bằng Ctrl+C / kill an toàn: `progress.json` ghi sau mỗi tội, file txt ghi qua `.tmp` rồi đổi tên; tội đang dở sẽ được cào lại, file đã tải dùng lại.
+- Lưu ý khi dừng: đừng `pkill -f crawl_congbobanan.py` trong một lệnh bash có chứa chính chuỗi đó (pkill giết luôn shell).
+- **Còn bàn với người dùng:** (a) lượt cào thứ hai lấy án **nhiều bị cáo** (tiêu đề "và đồng phạm", "+ ĐP") tách theo bị cáo, ứng với CMDL (4.785 bản ghi bị cáo trong kho bài báo + test 1.374); (b) có đưa toàn bộ ViCSR (~9.000 án, 93% Điều 249) vào kho như bài báo đưa nguyên JuDGE (5.752 án, không giới hạn theo tội) không; (c) OCR ảnh quét (`tesseract-ocr-vie`, phải tải lại PDF); (d) giới hạn cỡ tập test vì chi phí Qwen trên Kaggle.
+
 ### 11.13. Kết quả Kaggle lần 4: hỏi–đáp không dùng án (2026-10-11, `outputs/results (1)/`)
 
 | hỏi–đáp, 187 câu | recall | precision | đúng hết | đủ+thừa | một phần | sai hết | không trích | ứng viên TB |
@@ -1037,6 +1042,14 @@ Cấu hình: prompt không còn ví dụ, trả lời 80-200 từ, tuyến `van_
 - Tuyến đoán tội (2 node) thành tuyến chính: riêng nó tìm ra 55 điều (lần 3: 33).
 - **Lỗi tuyến vấn đề pháp lý: Qwen chép danh sách ví dụ trong `LEGAL_ISSUES_PROMPT`**: "độ tuổi chịu trách nhiệm hình sự" 146/187 câu, "thẩm quyền điều tra" 93, "tình tiết tăng nặng" 92, "lỗi" 91. Các điều chung chung này chiếm 4 chỗ riêng, đẩy ra 16 điều đúng mà tuyến đã tìm ra (8 BLTTHS, 8 BLHS), ví dụ BLTTHS 155 ở câu "rút đơn yêu cầu khởi tố".
 - Đáp án tự động có nhiễu: luật sư hay nhắc BLTTHS 155 cho cả câu "giao cấu với người dưới 16 tuổi phạm tội gì".
+
+### 11.14. Hỏi–đáp: diễn đạt lại câu hỏi bằng ngôn ngữ pháp lý; chạy lại riêng câu sai (2026-10-12, người dùng đề xuất)
+
+- Người dùng: câu hỏi đời thường khác xa câu chữ luật nên so vector yếu; nên làm như bước "mapping to legal essence" (OntologyAlign) của bài báo. Researcher của bài báo cũng gọi LLM (trích đặc trưng; đoán tội O(q), công thức 11).
+- Bước mới `rewrite_question` (`QA_REWRITE_PROMPT`, 1 lời gọi, `dien_dat_lai` = True, tắt bằng `--khong-dien-dat-lai`): Qwen diễn đạt lại câu hỏi bằng thuật ngữ BLHS/BLTTHS, giữ đủ tình tiết, không kết luận, không ghi số điều. Câu này dùng cho tìm theo nội dung luật, văn bản hướng dẫn, xếp hạng chỗ riêng; tuyến đoán tội và vấn đề pháp lý đọc cả câu gốc lẫn câu diễn đạt lại. Bước viết câu trả lời vẫn dùng câu gốc.
+- `LEGAL_ISSUES_PROMPT`: bỏ danh sách ví dụ cụ thể (Qwen đã chép), chỉ mô tả hai loại; dặn chỉ nêu vấn đề chính câu hỏi đặt ra.
+- 4 chỗ riêng: các điều của tuyến vấn đề pháp lý xếp theo cosine giữa tên điều và câu đã diễn đạt lại (trước: theo thứ tự Qwen nêu).
+- `--chi-cau FILE` (danh sách qa_number, hoặc file kết quả: lấy câu chưa đúng hết). `data/qa/cau_sai_lan4.json`: 132 câu lần 4 chưa đúng hết. Notebook `CHUC_NANG = 'hoi-dap-cau-sai'` (lượt 6, chia 2 GPU, tag `causai`).
 
 ## 10. Tham chiếu
 

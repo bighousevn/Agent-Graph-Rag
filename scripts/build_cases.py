@@ -8,6 +8,9 @@ ViCSR. See vn_legal_graph/cases/build_cases.py for the steps.
     # ViCSR cases labelled 410 are dropped (--drop-articles):
     python scripts/build_cases.py --all-crimes --anle data/raw/anle/documents.parquet \
         --corpus-max-per-crime 20 --test-per-crime 5 --test-min-cases 10
+    # + first-instance judgments from congbobanan.toaan.gov.vn (scripts/crawl_congbobanan.py):
+    python scripts/build_cases.py --all-crimes --anle data/raw/anle/documents.parquet \
+        --congbobanan data/raw/congbobanan --corpus-max-per-crime 20 --test-per-crime 5 --test-min-cases 10
 
 No LLM calls.
 """
@@ -52,6 +55,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--all-crimes", action="store_true", help="Every BLHS crime, not only --articles.")
     parser.add_argument("--anle", default="", help="anle.toaan.gov.vn parquet (vn_legal_graph/cases/anle.py) to add.")
+    parser.add_argument("--congbobanan", default="", help="crawl_congbobanan.py output directory to add.")
     parser.add_argument("--law-json", default="data/processed/law_to_crime_vn.json")
     parser.add_argument("--test-min-cases", type=int, default=0, help="Crimes with fewer cases get no test cases.")
     parser.add_argument("--drop-articles", nargs="*", type=int, default=[410],
@@ -118,6 +122,14 @@ def main() -> None:
         anle = records_from_documents(pq.read_table(args.anle).to_pylist(), law_json)
         print(f"anle.toaan.gov.vn: {len(anle)} án hình sự có nhãn và diễn biến")
         records.update(anle)
+    if args.congbobanan:
+        from vn_legal_graph.cases.congbobanan import records_from_dir
+
+        with open(args.law_json, encoding="utf-8") as f:
+            law_json = json.load(f)
+        cbba, cbba_dropped = records_from_dir(args.congbobanan, law_json)
+        print(f"congbobanan.toaan.gov.vn: {len(cbba)} án có nhãn và diễn biến; loại vì: {dict(cbba_dropped)}")
+        records.update(cbba)
     eligible = collections.Counter(a for r in records.values() for a in r["dieu"])
     shown = sorted(eligible, key=lambda a: -eligible[a]) if args.all_crimes else sorted(scope)
     print(f"Án đủ điều kiện theo tội ({len(eligible)} tội):", {a: eligible[a] for a in shown})

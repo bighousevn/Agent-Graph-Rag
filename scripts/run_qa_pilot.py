@@ -6,6 +6,7 @@ with the HierarGraph and score them against data/qa/pilot_gold.json.
     python scripts/run_qa_pilot.py --n 5
     python scripts/run_qa_pilot.py --auto-gold --n 40 --tag tudong40
     python scripts/run_qa_pilot.py --auto-gold --n 1000 --without-graph --no-grade   # LLM alone (Colab)
+    python scripts/run_qa_pilot.py --auto-gold --n 1000 --no-grade --chi-cau data/qa/cau_sai_lan4.json   # only last run's failures
     python scripts/run_qa_pilot.py --grade-only outputs/qa_llm_only_qwen3_8b-q8_0.json   # grade later
 
 --auto-gold: reference articles come from the lawyer's answer
@@ -51,6 +52,9 @@ def main() -> None:
     parser.add_argument("--max-candidates", type=int, default=DEFAULTS["max_candidates"])
     parser.add_argument("--dotenv-path", default=".env")
     parser.add_argument("--tag", default="", help="Suffix for the output file, e.g. lan2.")
+    parser.add_argument("--chi-cau", default="",
+                        help="Only these questions: a JSON list of qa_numbers, or an earlier result file (its questions not fully right).")
+    parser.add_argument("--khong-dien-dat-lai", action="store_true", help="Search with the question as asked (no legal restatement).")
     parser.add_argument("--shard", default="", help="K/N: only every N-th question from the K-th (several notebooks in parallel).")
     parser.add_argument("--merge", nargs="+", default=[], help="Join the result files of the shards into --merge-out, then report.")
     parser.add_argument("--merge-out", default="")
@@ -87,6 +91,10 @@ def main() -> None:
     else:
         gold = {g_["qa_number"]: g_ for g_ in json.load(open(args.gold, encoding="utf-8"))["cau_hoi"]}
         questions = load_questions(args.questions)[: args.n]
+    if args.chi_cau:
+        keep = set(load_question_ids(args.chi_cau))
+        questions = [q for q in questions if str(q["qa_number"]) in keep]
+        print(f"--chi-cau: {len(questions)} câu")
     if args.shard:
         questions = take_shard(questions, args.shard)
         print(f"Phần {args.shard}: {len(questions)} câu")
@@ -100,9 +108,10 @@ def main() -> None:
                   f"= {len(questions) * (1 + grade)} lần gọi, ước ~{len(questions) * (1 + grade) * 1_500:,} token đầu vào")
         else:
             slots = DEFAULTS["general_slots"]
-            per_q = (1 + (2 if args.rerank else 0) if args.dung_an else 0) + 1 + 1 + 2 * (args.max_candidates + slots) + 2 + grade
+            rw = 0 if args.khong_dien_dat_lai else 1
+            per_q = rw + (1 + (2 if args.rerank else 0) if args.dung_an else 0) + 1 + 1 + 2 * (args.max_candidates + slots) + 2 + grade
             print(f"{len(questions)} câu × tối đa {per_q} lần gọi LLM "
-                  f"({'đặc trưng, án tương tự, ' if args.dung_an else ''}đoán tội, vấn đề pháp lý, judge ≤{args.max_candidates}+{slots} điều × 2, trả lời + hỏi lại nếu ngắn{', chấm' if grade else ''}) "
+                  f"({'diễn đạt lại, ' if rw else ''}{'đặc trưng, án tương tự, ' if args.dung_an else ''}đoán tội, vấn đề pháp lý, judge ≤{args.max_candidates}+{slots} điều × 2, trả lời + hỏi lại nếu ngắn{', chấm' if grade else ''}) "
                   f"= tối đa {len(questions) * per_q} lần gọi, ước ~{len(questions) * 60_000:,} token đầu vào")
         for q in questions:
             print(f"  #{q['qa_number']} [{gold[str(q['qa_number'])].get('nhom', '')}]: {q['title']}")
@@ -116,7 +125,8 @@ def main() -> None:
     cfg = EmbeddingConfig()
     embedder = CachedEmbedder(embedder_from_config(cfg), cfg.model_name)
     run_cfg = {"judge_mode": args.judge_mode, "max_candidates": args.max_candidates,
-               "loc_theo_judge": args.loc_theo_judge, "rerank": args.rerank, "dung_an": args.dung_an}
+               "loc_theo_judge": args.loc_theo_judge, "rerank": args.rerank, "dung_an": args.dung_an,
+               "dien_dat_lai": not args.khong_dien_dat_lai}
 
     model_slug = re.sub(r"[^\w.-]", "_", client.llm_config.model)
     out = f"outputs/{'qa_llm_only' if args.without_graph else 'qa_pilot'}_{model_slug}{'_' + args.tag if args.tag else ''}{shard_suffix(args.shard)}.json"
@@ -147,6 +157,20 @@ def main() -> None:
 
     report_all(results, args)
     print(f"Đã ghi {out}")
+
+
+def load_question_ids(path):
+    """qa_numbers from a JSON list, or from a result file: the questions
+    whose cited articles were not exactly the gold ones."""
+    data = json.load(open(path, encoding="utf-8"))
+    if data and isinstance(data[0], dict):
+        out = []
+        for r in data:
+            s = score(r["tra_loi"], r["dap_an_chuan"])
+            if not (s["dieu_recall"] == 1.0 and s["dieu_precision"] == 1.0):
+                out.append(str(r["qa_number"]))
+        return out
+    return [str(x) for x in data]
 
 
 def write_json(path, data) -> None:
