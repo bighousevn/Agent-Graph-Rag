@@ -56,9 +56,9 @@ Tái hiện LegalGraphRAG (ACL 2026, PDF: <https://aclanthology.org/2026.acl-lon
 
 ### 0.4. Đang chờ / việc tiếp theo
 
-1. Lần 4 (hỏi–đáp không án) đã chạy, kết quả ở mục 11.13: ngang lần 3. Đã thêm bước diễn đạt lại câu hỏi và sửa tuyến vấn đề pháp lý (mục 11.14); chờ người dùng chạy Kaggle `CHUC_NANG = 'hoi-dap-cau-sai'` (132 câu sai của lần 4), rồi so với chính 132 câu đó ở lần 4.
+1. Lần 4 (hỏi–đáp không án) đã chạy, kết quả ở mục 11.13: ngang lần 3. Đã thêm bước diễn đạt lại câu hỏi và sửa tuyến vấn đề pháp lý (mục 11.14); lần 5 đã chạy (mục 11.15): tìm kiếm tốt hơn nhưng điểm cuối trong mức dao động.
 3. Người dùng muốn **tập trung hỏi–đáp trước**, hỏi án làm sau.
-4. **Kho án mới (mục 11.13)**: cào congbobanan **đang dừng ở 147/315 tội** (người dùng dừng 2026-10-11, xong tới Điều 254), chạy tiếp bằng `.venv/bin/python -u scripts/crawl_congbobanan.py >> data/raw/congbobanan/crawl.log 2>&1` (tự bỏ qua tội đã xong) → `build_cases.py --congbobanan` → trích đặc trưng (GPT-4o-mini, dry-run trước) → `build_graph.py` → tóm tắt cụm → dựng lại → commit graph + án test + cache embedding.
+4. **Kho án mới (mục 11.13)**: cào congbobanan **xong 315/315 tội** (2026-10-12); bản xem trước kho 2.169 án / 185 tội, test 560 án / 112 tội (chưa ghi vào `data/processed/`, chờ người dùng) → `build_cases.py --congbobanan` → trích đặc trưng (GPT-4o-mini, dry-run trước) → `build_graph.py` → tóm tắt cụm → dựng lại → commit graph + án test + cache embedding.
 
 ### 0.5. Cách chạy
 
@@ -1029,6 +1029,16 @@ Cấu hình: prompt không còn ví dụ, trả lời 80-200 từ, tuyến `van_
 **Tiến độ khi dừng (2026-10-11, sau 4 giờ 54 phút, Điều 108–254):** 147/315 tội; 2.065 án sơ thẩm có chữ, 1.789 PDF ảnh quét (~46%), 212 lỗi tải; 3.895 file trong `txt/`, 5.890 dòng `listings.jsonl` (69 MB). Theo tội: đủ 30 án 53 tội, 25–29: 2, 10–24: 18, 1–9: 42, 0 án: 32 (chủ yếu tội an ninh quốc gia và tội hiếm). Tốc độ ~2 phút/tội → còn ~5,5 giờ. Ước tính khi xong: ~4.000–4.500 án có chữ, ~110–120 tội đủ quota → kho ~3.000 án, test ~600 án (chưa kiểm chứng; số thật sau `build_cases.py`).
 - Dừng bằng Ctrl+C / kill an toàn: `progress.json` ghi sau mỗi tội, file txt ghi qua `.tmp` rồi đổi tên; tội đang dở sẽ được cào lại, file đã tải dùng lại.
 - Lưu ý khi dừng: đừng `pkill -f crawl_congbobanan.py` trong một lệnh bash có chứa chính chuỗi đó (pkill giết luôn shell).
+**Cào xong (2026-10-12):** 315/315 tội; 3.502 án có chữ, 2.996 ảnh quét (46%), 401 lỗi tải; 6.498 file txt (118 MB). Theo tội: đủ 30 án 87, 25–29: 4, 10–24: 33, 1–9: 91, 0 án: 100.
+
+**`build_cases.py --all-crimes --anle … --congbobanan … --corpus-max-per-crime 20 --test-per-crime 5 --test-min-cases 10`** (mới chạy ra thư mục tạm, chưa ghi đè `data/processed/`):
+- congbobanan: 3.340 bản ghi (loại 2.996 ảnh quét, 130 không gắn được nhãn, 23 diễn biến ngắn, 9 phúc thẩm).
+- **Kho 2.169 án / 185 tội** (ViCSR 75, anle 119, cbba 1.975; 77 tội đủ 20 án; 160 án nhiều tội). **Test 560 án / 112 tội** (93 tội đúng 5 án; 38 án nhiều tội), gần 568 án CAIL của bài báo. Diễn biến trung vị 1.193 từ (~5.000 ký tự; ViCSR ~600 từ), 483/2.729 án dài hơn 10.000 ký tự (pipeline cắt ở 10.000, trích đặc trưng cắt ở 6.000).
+- Test cũ 55 án: chỉ 2 án còn ở test mới, 20 án sang kho → **kết quả lần 2/3 không so trực tiếp được** với test mới.
+- Kiểm chứng nhãn: 94% án cbba có nhãn khớp tội đã dùng để tìm; nhãn dự phòng `dieu_luat_xac_nhan` (40% án) khớp 975/1.005. Phần lệch là án trang xếp nhầm tội.
+- Rò rỉ tên tội rút gọn ("tội tàng trữ lưu hành tiền giả", "tội bắt giữ người trái pháp luật", "tội hủy hoại tài sản"): thêm `anle.mask_subsequence_names` (che "tội" + ≥3 chữ có theo thứ tự trong một tên tội, trừ "tội phạm …"), dùng cho anle và cbba. Sau khi sửa: test 0 án lộ; còn lại toàn cụm chữ thường ("phạm tội mà có"); kho còn 1 án dùng tên BLHS 1999 ("mua bán phụ nữ").
+- Dry-run trích đặc trưng: 2.729 lời gọi, ~5,57 triệu token đầu vào (kho 4,43 triệu, test 1,13 triệu) + ~150 token ra/án.
+
 - **Còn bàn với người dùng:** (a) lượt cào thứ hai lấy án **nhiều bị cáo** (tiêu đề "và đồng phạm", "+ ĐP") tách theo bị cáo, ứng với CMDL (4.785 bản ghi bị cáo trong kho bài báo + test 1.374); (b) có đưa toàn bộ ViCSR (~9.000 án, 93% Điều 249) vào kho như bài báo đưa nguyên JuDGE (5.752 án, không giới hạn theo tội) không; (c) OCR ảnh quét (`tesseract-ocr-vie`, phải tải lại PDF); (d) giới hạn cỡ tập test vì chi phí Qwen trên Kaggle.
 
 ### 11.13. Kết quả Kaggle lần 4: hỏi–đáp không dùng án (2026-10-11, `outputs/results (1)/`)
@@ -1050,6 +1060,20 @@ Cấu hình: prompt không còn ví dụ, trả lời 80-200 từ, tuyến `van_
 - `LEGAL_ISSUES_PROMPT`: bỏ danh sách ví dụ cụ thể (Qwen đã chép), chỉ mô tả hai loại; dặn chỉ nêu vấn đề chính câu hỏi đặt ra.
 - 4 chỗ riêng: các điều của tuyến vấn đề pháp lý xếp theo cosine giữa tên điều và câu đã diễn đạt lại (trước: theo thứ tự Qwen nêu).
 - `--chi-cau FILE` (danh sách qa_number, hoặc file kết quả: lấy câu chưa đúng hết). `data/qa/cau_sai_lan4.json`: 132 câu lần 4 chưa đúng hết. Notebook `CHUC_NANG = 'hoi-dap-cau-sai'` (lượt 6, chia 2 GPU, tag `causai`).
+
+### 11.15. Kết quả lần 5: diễn đạt lại, chỉ 132 câu sai của lần 4 (2026-10-12, `outputs/results copy/`)
+
+So trên đúng 132 câu đó (lần 3 cũng chạy 132 câu này nhưng không chọn theo nó, nên là mốc "chạy lại thì dao động bao nhiêu"):
+
+| 132 câu | recall | precision | đúng hết | sai hết | điều chuẩn trong ứng viên (tội / chung / BLTTHS) | Qwen trích đúng (tội / chung / BLTTHS) |
+|---|---|---|---|---|---|---|
+| lần 3 (có án) | 0,38 | 0,48 | 16 | 43 | 162/293 (114 / 46 / 2) | 61 / 25 / 2 |
+| lần 4 | 0,29 | 0,42 | 0 | 53 | 161/293 (118 / 42 / 1) | 50 / 22 / 1 |
+| lần 5 (diễn đạt lại) | 0,33 | 0,45 | 14 | 51 | **173/293** (123 / 45 / 5) | 60 / 20 / 3 |
+
+- Diễn đạt lại giúp tìm kiếm: +12 điều chuẩn vào ứng viên so với lần 4 (BLTTHS 1 → 5, tội 118 → 123). Nhưng điểm cuối (recall 0,33, 14 câu đúng hết) không hơn mức dao động khi chạy lại (lần 3 trên cùng 132 câu: 0,38, 16 câu). Từng câu so lần 4: tốt hơn 26, kém hơn 15.
+- Qwen lại chép chữ trong phần mô tả của `LEGAL_ISSUES_PROMPT`: "điều kiện chịu trách nhiệm hình sự" 36/132 câu, "trường hợp loại trừ trách nhiệm hình sự" 14.
+- Chỗ mất điểm vẫn là bước Qwen trích điều trong câu trả lời. Qwen chạy với temperature 0,1 nên mỗi lần chạy dao động; so sánh giữa các lần cần chạy đủ 187 câu hoặc đặt temperature 0.
 
 ## 10. Tham chiếu
 
