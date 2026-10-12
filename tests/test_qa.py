@@ -326,3 +326,13 @@ def test_law_names_are_not_counted_as_copying():
     q = "Bị hại có được xem hồ sơ vụ án không?"
     assert copied_from_prompt("quyền của bị hại trong tố tụng hình sự", LEGAL_ISSUES_PROMPT, q) == []
     assert copied_from_prompt("quy định chung của Bộ luật Hình sự", LEGAL_ISSUES_PROMPT, q) != []
+
+
+def test_order_by_confidence():
+    from vn_legal_graph.qa.pipeline import order_by_confidence
+
+    laws = ["a", "b", "c", "d"]
+    judgments = {"a": {"ap_dung": False}, "b": {"ap_dung": True}, "c": {"ap_dung": False}, "d": {"ap_dung": True}}
+    routes = {"r1": ["a", "c", "d"], "r2": ["c"], "r3": ["c", "b"]}
+    # accepted first (b, d), b found by 1 route, d by 1: kept order; then c (3 routes) before a (1 route)
+    assert order_by_confidence(laws, judgments, routes) == ["b", "d", "c", "a"]

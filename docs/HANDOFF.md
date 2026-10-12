@@ -56,7 +56,7 @@ Tái hiện LegalGraphRAG (ACL 2026, PDF: <https://aclanthology.org/2026.acl-lon
 
 ### 0.4. Đang chờ / việc tiếp theo
 
-1. Lần 4 (hỏi–đáp không án) đã chạy, kết quả ở mục 11.13: ngang lần 3. Đã thêm bước diễn đạt lại câu hỏi và sửa tuyến vấn đề pháp lý (mục 11.14); lần 5 đã chạy (mục 11.15): tìm kiếm tốt hơn nhưng điểm cuối trong mức dao động.
+1. Lần 4 (hỏi–đáp không án) đã chạy, kết quả ở mục 11.13: ngang lần 3. Đã thêm bước diễn đạt lại câu hỏi và sửa tuyến vấn đề pháp lý (mục 11.14); lần 5 đã chạy (mục 11.15): tìm kiếm tốt hơn nhưng điểm cuối trong mức dao động. Sau đó: chống chép prompt (11.16), temperature 0 và phép thử xếp lại điều (11.17); chờ người dùng chạy `CHUC_NANG = 'hoi-dap-cau-sai-ab'`.
 3. Người dùng muốn **tập trung hỏi–đáp trước**, hỏi án làm sau.
 4. **Kho án mới (mục 11.13)**: cào congbobanan **xong 315/315 tội** (2026-10-12); bản xem trước kho 2.169 án / 185 tội, test 560 án / 112 tội (chưa ghi vào `data/processed/`, chờ người dùng) → `build_cases.py --congbobanan` → trích đặc trưng (GPT-4o-mini, dry-run trước) → `build_graph.py` → tóm tắt cụm → dựng lại → commit graph + án test + cache embedding.
 
@@ -1080,6 +1080,13 @@ So trên đúng 132 câu đó (lần 3 cũng chạy 132 câu này nhưng không 
 - Đo lần 5 (cụm 3 từ của đầu ra có trong prompt mà không có trong câu hỏi): diễn đạt lại 0; đoán tội 8 tên dính "Bộ luật Hình sự" (vô hại); vấn đề pháp lý chép nặng ("điều kiện chịu trách nhiệm hình sự" 73 cụm, "trường hợp loại trừ" 14).
 - Ba lớp: (1) `LEGAL_ISSUES_PROMPT` viết lại không còn cụm danh từ để chép, chỉ mô tả cách làm; (2) mỗi vấn đề phải kèm `trich` = đoạn chép nguyên văn từ câu hỏi, đầu ra JSON `[{"van_de", "trich"}]` (`parse_issues`); (3) `grounded_issues` bỏ vấn đề có trích dẫn < 70% từ nằm trong câu hỏi + câu diễn đạt lại, hoặc có cụm 3 từ của prompt mà câu hỏi không có (`copied_from_prompt`, trừ tên luật `LAW_NAME_GRAMS`). Vấn đề bị bỏ ghi trong `llm_van_de` với `bo`; `run_qa_pilot.py` in số bị lọc theo lý do.
 - Thử bộ lọc chép trên 660 vấn đề của lần 5 (với prompt lần 5): lọc 135 (36 "điều kiện chịu trách nhiệm hình sự", 14 "trường hợp loại trừ…").
+
+### 11.17. Temperature 0 và phép thử xếp lại điều (2026-10-12, người dùng yêu cầu)
+
+- Notebook đặt `LLM_TEMPERATURE=0` (khoá cache có temperature nên cache cũ không dùng lại).
+- Tín hiệu đo trên lần 5 (1.575 điều đưa cho Qwen): điều chỉ 1 tuyến tìm ra đúng 6%, 2 tuyến 35%, ≥3 tuyến 54%; judge "thỏa mãn" đúng 46%, "không thỏa mãn" 8%; vị trí 1-3 đúng 25%, 9-12 đúng 6%. Không cắt điều nào (nhóm 1 tuyến vẫn có 80 điều đúng, nhóm "không thỏa mãn" 109).
+- `--xep-lai` (`xep_theo_do_chac`, `order_by_confidence`): trong prompt trả lời, điều judge "thỏa mãn" trước, rồi theo số tuyến cùng tìm ra; mặc định tắt (thứ tự cũ: "thỏa mãn" trước, rồi theo thứ tự tuyến).
+- Notebook `CHUC_NANG = 'hoi-dap-cau-sai-ab'`: 132 câu sai của lần 4, lượt 6 (không xếp) rồi lượt 7 (`--xep-lai`, tag `causai_xep`) trên cùng GPU; lượt 7 dùng lại cache của 6, chỉ bước viết câu trả lời là mới.
 
 ## 10. Tham chiếu
 

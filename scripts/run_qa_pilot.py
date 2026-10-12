@@ -55,6 +55,8 @@ def main() -> None:
     parser.add_argument("--tag", default="", help="Suffix for the output file, e.g. lan2.")
     parser.add_argument("--chi-cau", default="",
                         help="Only these questions: a JSON list of qa_numbers, or an earlier result file (its questions not fully right).")
+    parser.add_argument("--xep-lai", action="store_true",
+                        help="Order the articles in the answer prompt by confidence (judge, then number of routes that found them).")
     parser.add_argument("--khong-dien-dat-lai", action="store_true", help="Search with the question as asked (no legal restatement).")
     parser.add_argument("--shard", default="", help="K/N: only every N-th question from the K-th (several notebooks in parallel).")
     parser.add_argument("--merge", nargs="+", default=[], help="Join the result files of the shards into --merge-out, then report.")
@@ -127,7 +129,7 @@ def main() -> None:
     embedder = CachedEmbedder(embedder_from_config(cfg), cfg.model_name)
     run_cfg = {"judge_mode": args.judge_mode, "max_candidates": args.max_candidates,
                "loc_theo_judge": args.loc_theo_judge, "rerank": args.rerank, "dung_an": args.dung_an,
-               "dien_dat_lai": not args.khong_dien_dat_lai}
+               "dien_dat_lai": not args.khong_dien_dat_lai, "xep_theo_do_chac": args.xep_lai}
 
     model_slug = re.sub(r"[^\w.-]", "_", client.llm_config.model)
     out = f"outputs/{'qa_llm_only' if args.without_graph else 'qa_pilot'}_{model_slug}{'_' + args.tag if args.tag else ''}{shard_suffix(args.shard)}.json"

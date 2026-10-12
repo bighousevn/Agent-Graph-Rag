@@ -74,6 +74,11 @@ DEFAULTS = {
     # Restate the question in legal language first and search with that
     # (people's words rarely match the statute's).
     "dien_dat_lai": True,
+    # Order of the articles in the answer prompt. False: accepted by judge
+    # first, then retrieval order. True: accepted first, and within each
+    # group the articles more routes found first (run 5: right 6% of the
+    # time when one route found it, 35% two, 54% three or more).
+    "xep_theo_do_chac": False,
     # An answer shorter than this (words) is asked again once.
     "min_answer_words": 40,
     "judge_mode": "gop",
@@ -483,6 +488,8 @@ def answer_question(
         used = accepted or retrieval["ung_vien"][:3]
     else:
         used = accepted + [n for n in retrieval["ung_vien"] if n not in accepted]
+    if cfg["xep_theo_do_chac"]:
+        used = order_by_confidence(used, judgments, retrieval["tuyen"])
 
     prompt = QA_ANSWER_PROMPT.format(
         question=question, laws=render_laws_for_answer(g, used, cfg, judgments, embed(question), embed)
@@ -501,6 +508,14 @@ def answer_question(
         "tra_loi_tho": raw if answer is None else None,
         "hoi_lai_vi_ngan": retried,
     }
+
+
+def order_by_confidence(laws: List[str], judgments: Dict[str, Dict], routes: Dict[str, List[str]]) -> List[str]:
+    """Accepted by judge first, then by how many routes found the article;
+    ties keep the given order."""
+    n_routes = {n: sum(n in found for found in routes.values()) for n in laws}
+    rank = {n: i for i, n in enumerate(laws)}
+    return sorted(laws, key=lambda n: (not judgments.get(n, {}).get("ap_dung"), -n_routes[n], rank[n]))
 
 
 def answer_with_retry(prompt: str, generate: Generate, min_words: int):
