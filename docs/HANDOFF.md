@@ -56,7 +56,7 @@ Tái hiện LegalGraphRAG (ACL 2026, PDF: <https://aclanthology.org/2026.acl-lon
 
 ### 0.4. Đang chờ / việc tiếp theo
 
-1. Lần 4 (hỏi–đáp không án) đã chạy, kết quả ở mục 11.13: ngang lần 3. Đã thêm bước diễn đạt lại câu hỏi và sửa tuyến vấn đề pháp lý (mục 11.14); lần 5 đã chạy (mục 11.15): tìm kiếm tốt hơn nhưng điểm cuối trong mức dao động. Sau đó: chống chép prompt (11.16), temperature 0 và phép thử xếp lại điều (11.17); chờ người dùng chạy `CHUC_NANG = 'hoi-dap-cau-sai-ab'`.
+1. Lần 4 (hỏi–đáp không án) đã chạy, kết quả ở mục 11.13: ngang lần 3. Đã thêm bước diễn đạt lại câu hỏi và sửa tuyến vấn đề pháp lý (mục 11.14); lần 5 đã chạy (mục 11.15): tìm kiếm tốt hơn nhưng điểm cuối trong mức dao động. Sau đó: chống chép prompt (11.16), temperature 0 và phép thử xếp lại điều (11.17); lượt 6/7 đã chạy (mục 11.18): chống chép hiệu quả, xếp lại giúp ít (+5 điều đúng/132 câu); điểm trên 132 câu khó dừng ở 0,35–0,36.
 3. Người dùng muốn **tập trung hỏi–đáp trước**, hỏi án làm sau.
 4. **Kho án mới xong (mục 11.13 "Cào án", 11.18):** graph và test 560 án đã commit. Người dùng chạy Kaggle `CHUC_NANG = 'hoi-an'` (lượt 4, như bài báo, ~122.000 lời gọi, ~10 giờ trên 2 GPU), sau đó `'hoi-an-khongtach'` (lượt 5) ở phiên riêng. Chưa đo truy xuất không LLM trên test mới (`evaluate_retrieval.py` chạy >1 giờ trên CPU, người dùng bỏ qua).
 
@@ -1096,6 +1096,23 @@ So trên đúng 132 câu đó (lần 3 cũng chạy 132 câu này nhưng không 
 - `build_graph.py --extra-laws data/processed/law_bltths_vn.json data/processed/law_xlvphc_vn.json data/processed/law_nd282_vn.json` (6 phút CPU): 6.507 cạnh SIMILAR_TO, **63% nối hai án chung điều** (ghép ngẫu nhiên 0,9%); Louvain 34 cụm (16–220 án). Tóm tắt cụm GPT-4o-mini (34 lời gọi): mỗi cụm một nhóm tội riêng (thương tích, tham nhũng, thuế/hóa đơn, đánh bạc, ma túy, mại dâm, tiền giả, giao thông, rừng/động vật…), không còn trùng như các lần trước.
 - Dry-run hỏi án 560 án như bài báo: ~122.566 lời gọi (~368 triệu token vào). Log Ollama lần 3: ~6.000 lời gọi/giờ/GPU T4 → ~10 giờ cho lượt 4 trên 2 GPU. Notebook: `hoi-an` = lượt 4 chia đôi; `hoi-an-khongtach` = lượt 5 chia đôi (phiên riêng).
 - Test: 180 passed, 1 skipped.
+
+### 11.18. Kết quả lượt 6/7: chống chép + temperature 0, không xếp / xếp lại (2026-10-14, `outputs/results (2)/`)
+
+132 câu sai của lần 4:
+
+| | recall | precision | đúng hết | sai hết | điều chuẩn trong ứng viên (tội / chung / BLTTHS) | Qwen trích đúng |
+|---|---|---|---|---|---|---|
+| lần 3 | 0,38 | 0,48 | 16 | 43 | 162 (114 / 46 / 2) | 88 |
+| lần 4 | 0,29 | 0,42 | 0 | 53 | 161 (118 / 42 / 1) | 73 |
+| lần 5 (diễn đạt lại) | 0,33 | 0,45 | 14 | 51 | 173 (123 / 45 / 5) | 83 |
+| lượt 6 (chống chép, temp 0) | 0,35 | 0,48 | 12 | 46 | 167 (123 / 40 / 4) | 88 |
+| lượt 7 (= 6 + `--xep-lai`) | 0,36 | 0,48 | 14 | 47 | 167 | 93 |
+
+- Chống chép có tác dụng: vấn đề chung chung biến mất; 52/630 vấn đề bị lọc, gần hết vì chép cụm "quy định chung (của Bộ luật Hình sự)" trong prompt mới; không vấn đề nào bị lọc vì trích dẫn sai. Đổi lại điều phần chung trong ứng viên giảm 45 → 40 (luật sư hay trích Điều 2, 12 kiểu chung chung, các vấn đề chép trước đây tình cờ trúng).
+- Xếp lại: cùng danh sách ứng viên (132/132), Qwen trích đúng 88 → 93 điều; từng câu tốt hơn 7, kém hơn 5, giống 120. Tác dụng nhỏ nhưng là thật (temperature 0).
+- 12 lời gọi vấn đề pháp lý bị cắt ở 512 token (JSON có trích dẫn dài hơn): nâng lên 1.024.
+- Trên 132 câu khó, mọi cấu hình nằm trong 0,29–0,38: graph đưa được ~57% điều chuẩn vào ứng viên, Qwen trích được ~55% số đó.
 
 ## 10. Tham chiếu
 

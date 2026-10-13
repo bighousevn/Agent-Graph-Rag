@@ -312,7 +312,7 @@ def llm_issue_laws(
     questions pushed out 16 right articles)."""
     prompt = LEGAL_ISSUES_PROMPT.format(question=question, rewrite=rewrite or question)
     issues, dropped = grounded_issues(
-        parse_issues(generate(prompt, max_tokens=512)), f"{question} {rewrite}", LEGAL_ISSUES_PROMPT
+        parse_issues(generate(prompt, max_tokens=1024)), f"{question} {rewrite}", LEGAL_ISSUES_PROMPT
     )
     index = general_title_index(g, embed)
     laws: List[str] = []
