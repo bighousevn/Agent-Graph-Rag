@@ -17,3 +17,6 @@ pyvi>=0.1.1
 requests>=2.31.0
 openpyxl>=3.1  # reads data/raw/questions.xlsx
 tqdm>=4.66.0
+
+# Web UI (app/ui.py, ./run_ui.sh)
+streamlit>=1.40

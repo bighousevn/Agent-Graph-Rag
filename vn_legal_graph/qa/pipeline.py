@@ -469,10 +469,17 @@ def parse_answer(text: str) -> Optional[Dict]:
 
 
 def answer_question(
-    g: HierarGraph, question: str, generate: Generate, embed: Embed, cfg: Optional[Dict] = None
+    g: HierarGraph, question: str, generate: Generate, embed: Embed, cfg: Optional[Dict] = None,
+    progress: Optional[Callable[[str, Dict], None]] = None,
 ) -> Dict:
+    """progress(step, info), if given, is told when each step finishes (for
+    the UI): "dien_dat_lai", "tim_dieu", "tham_dinh" once per candidate,
+    then "tra_loi" before the answer is written. It does not change the
+    result."""
     cfg = {**DEFAULTS, **(cfg or {})}
+    report = progress or (lambda step, info: None)
     rewrite = rewrite_question(question, generate) if cfg["dien_dat_lai"] else ""
+    report("dien_dat_lai", {"text": rewrite})
     description = ""
     if cfg["dung_an"]:  # features only serve the case routes
         features = parse_features(generate(build_prompt(question)))
@@ -481,7 +488,12 @@ def answer_question(
     query_vec = embed(description or question)
 
     retrieval = retrieve_candidates(g, question, query_vec, generate, embed, cfg, description, rewrite)
-    judgments = {n: judge_candidate(g, n, question, generate, cfg["judge_mode"]) for n in retrieval["ung_vien"]}
+    report("tim_dieu", {"ung_vien": [law_label(g, n) for n in retrieval["ung_vien"]]})
+    judgments = {}
+    for i, n in enumerate(retrieval["ung_vien"], 1):
+        judgments[n] = judge_candidate(g, n, question, generate, cfg["judge_mode"])
+        report("tham_dinh", {"xong": i, "tong": len(retrieval["ung_vien"]), "dieu": law_label(g, n),
+                             "ap_dung": judgments[n]["ap_dung"]})
     accepted = [n for n in retrieval["ung_vien"] if judgments[n]["ap_dung"]]
     fallback = not accepted
     if cfg["loc_theo_judge"]:
@@ -494,6 +506,7 @@ def answer_question(
     prompt = QA_ANSWER_PROMPT.format(
         question=question, laws=render_laws_for_answer(g, used, cfg, judgments, embed(question), embed)
     )
+    report("tra_loi", {"so_dieu": len(used)})
     raw, answer, retried = answer_with_retry(prompt, generate, cfg["min_answer_words"])
     return {
         "dien_dat_lai": rewrite,
