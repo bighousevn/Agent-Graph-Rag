@@ -55,8 +55,9 @@ def test_progress_is_optional_and_does_not_change_the_answer():
 
 
 class _Resp:
-    def __init__(self, data):
+    def __init__(self, data, status_code=200):
         self.data = data
+        self.status_code = status_code
 
     def json(self):
         return self.data
@@ -66,18 +67,40 @@ def test_check_ollama():
     s = service.UISettings(base_url="http://127.0.0.1:11434/v1", model="qwen3:8b-q8_0")
     seen = []
 
-    def has_model(url, timeout):
-        seen.append(url)
+    def has_model(url, timeout, headers):
+        seen.append((url, headers))
         return _Resp({"models": [{"name": "qwen3:8b-q8_0"}]})
 
-    assert service.check_ollama(s, has_model)[0] and seen == ["http://127.0.0.1:11434/api/tags"]
-    ok, msg = service.check_ollama(s, lambda url, timeout: _Resp({"models": []}))
+    assert service.check_ollama(s, has_model)[0] and seen == [("http://127.0.0.1:11434/api/tags", {})]
+    ok, msg = service.check_ollama(s, lambda url, timeout, headers: _Resp({"models": []}))
     assert not ok and "ollama pull qwen3:8b-q8_0" in msg
 
-    def down(url, timeout):
+    def down(url, timeout, headers):
         raise ConnectionError
 
-    assert not service.check_ollama(s, down)[0]
+    ok, msg = service.check_ollama(s, down)
+    assert not ok and "ollama serve" in msg
+
+
+def test_check_ollama_on_modal_sends_token_and_explains_cold_start():
+    s = service.UISettings(base_url="https://ws--legal-qwen-serve.modal.run", model="qwen3:8b-q8_0",
+                           proxy_key="wk-1", proxy_secret="ws-2")
+    assert not s.is_local and s.headers == {"Modal-Key": "wk-1", "Modal-Secret": "ws-2"}
+    seen = []
+
+    def ok_model(url, timeout, headers):
+        seen.append((url, headers))
+        return _Resp({"models": [{"name": "qwen3:8b-q8_0"}]})
+
+    ok, msg = service.check_ollama(s, ok_model)
+    assert ok and msg.startswith("Modal sẵn sàng") and seen[0] == ("https://ws--legal-qwen-serve.modal.run/api/tags", s.headers)
+    assert "MODAL_PROXY_KEY" in service.check_ollama(s, lambda url, timeout, headers: _Resp({}, 401))[1]
+
+    def cold(url, timeout, headers):
+        raise TimeoutError
+
+    assert "khởi động" in service.check_ollama(s, cold)[1]
+    assert service.make_client(s).llm_config.headers == s.headers
 
 
 def test_settings_and_client_do_not_read_dotenv(monkeypatch):

@@ -135,3 +135,25 @@ def test_ollama_uses_native_chat_without_thinking(tmp_path, monkeypatch):
     assert url == "http://localhost:11434/api/chat" and body["think"] is False and body["stream"] is False
     assert body["messages"][0]["content"] == "p" and body["options"]["num_predict"] == 128
     assert c.generate("p", max_tokens=16) == "true" and len(sent) == 1  # cached
+
+
+def test_ollama_sends_proxy_auth_headers_and_keeps_the_cache_key(tmp_path, monkeypatch):
+    import requests
+
+    sent = []
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"message": {"content": "true"}, "done_reason": "stop"}
+
+    monkeypatch.setattr(requests, "post", lambda url, json, timeout, headers: sent.append((url, headers)) or Resp())
+    remote = LLMConfig(api_key="ollama", model="qwen3:8b-q8_0", provider="ollama",
+                       base_url="https://ws--legal-qwen-serve.modal.run", headers={"Modal-Key": "k", "Modal-Secret": "s"})
+    c = LLMClient(AppConfig(llm=remote, cache_dir=str(tmp_path)))
+    assert c.generate("p", max_tokens=16) == "true"
+    assert sent == [("https://ws--legal-qwen-serve.modal.run/api/chat", {"Modal-Key": "k", "Modal-Secret": "s"})]
+    local = LLMConfig(api_key="ollama", model="qwen3:8b-q8_0", provider="ollama", base_url="http://localhost:11434/v1")
+    assert LLMClient(AppConfig(llm=local, cache_dir=str(tmp_path)))._cache_path("p", 16) == c._cache_path("p", 16)

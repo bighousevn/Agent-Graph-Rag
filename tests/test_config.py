@@ -51,3 +51,14 @@ def test_openai_defaults_unchanged(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
     llm = AppConfig.from_env_file(NO_DOTENV).llm
     assert (llm.provider, llm.base_url, llm.model) == ("openai", "https://api.openai.com/v1", "gpt-4o-mini")
+
+
+def test_modal_proxy_token_becomes_headers(monkeypatch):
+    _clear(monkeypatch)
+    monkeypatch.delenv("MODAL_PROXY_KEY", raising=False)
+    monkeypatch.delenv("MODAL_PROXY_SECRET", raising=False)
+    assert AppConfig.from_env_file(NO_DOTENV).llm.headers == {}
+    monkeypatch.setenv("MODAL_PROXY_KEY", "wk-1")
+    assert AppConfig.from_env_file(NO_DOTENV).llm.headers == {}  # both parts needed
+    monkeypatch.setenv("MODAL_PROXY_SECRET", "ws-2")
+    assert AppConfig.from_env_file(NO_DOTENV).llm.headers == {"Modal-Key": "wk-1", "Modal-Secret": "ws-2"}

@@ -3,6 +3,8 @@ talks to Ollama, and turns answer_question's trace into what the page shows.
 
 No .env is read: the UI has its own LLM settings (UISettings, overridable
 with UI_LLM_BASE_URL / UI_LLM_MODEL), so the key in .env is never loaded.
+For Qwen on Modal (modal_app.py), UI_LLM_BASE_URL is its URL and
+MODAL_PROXY_KEY / MODAL_PROXY_SECRET its proxy auth token.
 """
 from __future__ import annotations
 
@@ -44,13 +46,27 @@ class UISettings:
     model: str = "qwen3:8b-q8_0"  # the model of the Kaggle runs, so their cache is reused
     timeout: int = 600
     cache_dir: str = ".cache/llm"
+    proxy_key: str = ""
+    proxy_secret: str = ""
 
     @classmethod
     def from_env(cls) -> "UISettings":
         return cls(
             base_url=os.getenv("UI_LLM_BASE_URL", cls.base_url),
             model=os.getenv("UI_LLM_MODEL", cls.model),
+            proxy_key=os.getenv("MODAL_PROXY_KEY", ""),
+            proxy_secret=os.getenv("MODAL_PROXY_SECRET", ""),
         )
+
+    @property
+    def headers(self) -> Dict[str, str]:
+        from vn_legal_graph.config import proxy_headers
+
+        return proxy_headers(self.proxy_key, self.proxy_secret)
+
+    @property
+    def is_local(self) -> bool:
+        return bool(re.match(r"https?://(127\.0\.0\.1|localhost)(:|/|$)", self.base_url))
 
 
 def make_client(s: UISettings):
@@ -59,24 +75,30 @@ def make_client(s: UISettings):
     from vn_legal_graph.llm import LLMClient
 
     llm = LLMConfig(base_url=s.base_url, api_key="ollama", model=s.model, temperature=0.0,
-                    timeout=s.timeout, provider="ollama")
+                    timeout=s.timeout, provider="ollama", headers=s.headers)
     return LLMClient(AppConfig(llm=llm, cache_dir=s.cache_dir))
 
 
 def check_ollama(s: UISettings, get: Optional[Callable] = None) -> Tuple[bool, str]:
-    """(ready, message): the server answers and has the model."""
+    """(ready, message): the server answers and has the model. On Modal a
+    stopped GPU takes a minute or two to start; this request also starts it."""
     import requests
 
     get = get or requests.get
     root = re.sub(r"/v1/?$", "", s.base_url.rstrip("/"))
     try:
-        tags = get(f"{root}/api/tags", timeout=5).json()
+        resp = get(f"{root}/api/tags", timeout=5, headers=s.headers)
+        if getattr(resp, "status_code", 200) in (401, 403):
+            return False, "Modal từ chối: kiểm tra MODAL_PROXY_KEY / MODAL_PROXY_SECRET."
+        tags = resp.json()
     except Exception:  # noqa: BLE001 - any failure means "not reachable"
-        return False, f"Không kết nối được Ollama ở {root}. Hãy chạy `ollama serve`."
+        if s.is_local:
+            return False, f"Không kết nối được Ollama ở {root}. Hãy chạy `ollama serve`."
+        return False, f"{root} chưa trả lời: GPU trên Modal có thể đang khởi động (1–2 phút). Bấm Kiểm tra lại."
     names = {m.get("name") for m in tags.get("models", [])}
     if s.model not in names:
         return False, f"Ollama chưa có model {s.model}. Hãy chạy `ollama pull {s.model}`."
-    return True, f"Ollama sẵn sàng · {s.model}"
+    return True, f"{'Ollama' if s.is_local else 'Modal'} sẵn sàng · {s.model}"
 
 
 def load_graph(path: str = GRAPH_PATH) -> HierarGraph:

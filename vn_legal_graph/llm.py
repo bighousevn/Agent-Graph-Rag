@@ -137,7 +137,8 @@ class LLMClient:
             "options": {"temperature": cfg.temperature, "num_predict": max(limit, OLLAMA_MIN_PREDICT)},
         }
         url = re.sub(r"/v1/?$", "", cfg.base_url.rstrip("/")) + "/api/chat"
-        resp = requests.post(url, json=body, timeout=cfg.timeout)
+        extra = {"headers": cfg.headers} if cfg.headers else {}  # Modal proxy auth (modal_app.py)
+        resp = requests.post(url, json=body, timeout=cfg.timeout, **extra)
         resp.raise_for_status()
         data = resp.json()
         return strip_think(data["message"].get("content") or ""), data.get("done_reason") == "length"

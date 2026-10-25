@@ -20,3 +20,5 @@ tqdm>=4.66.0
 
 # Web UI (app/ui.py, ./run_ui.sh)
 streamlit>=1.40
+# Qwen on a Modal GPU instead of local Ollama (modal_app.py), optional
+modal>=1.6

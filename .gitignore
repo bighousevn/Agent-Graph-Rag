@@ -30,3 +30,6 @@ data/raw/anle/
 
 # congbobanan.toaan.gov.vn, tải lại được: python scripts/crawl_congbobanan.py
 data/raw/congbobanan/
+
+# Modal proxy auth token (modal_app.py), never commit
+.modal_proxy.env

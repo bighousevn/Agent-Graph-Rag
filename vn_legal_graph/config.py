@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Dict, Optional
 
 try:
     from dotenv import load_dotenv
@@ -50,6 +50,16 @@ class LLMConfig:
     # DeepSeek only: "disabled" (default) or "enabled". Thinking mode ignores
     # temperature, and its effect on max_tokens is not documented.
     thinking: str = "disabled"
+    # Extra HTTP headers for Ollama requests, e.g. Modal proxy auth
+    # (modal_app.py); see proxy_headers.
+    headers: Dict[str, str] = field(default_factory=dict)
+
+
+def proxy_headers(key: Optional[str], secret: Optional[str]) -> Dict[str, str]:
+    """Modal proxy auth headers, or none when no token is set."""
+    if key and secret:
+        return {"Modal-Key": key, "Modal-Secret": secret}
+    return {}
 
 
 # Provider defaults, from https://api-docs.deepseek.com (checked 2026-10-05):
@@ -119,6 +129,7 @@ class AppConfig:
             temperature=_env_float("LLM_TEMPERATURE", LLMConfig.temperature),
             max_tokens=_env_int("LLM_MAX_TOKENS", LLMConfig.max_tokens),
             timeout=_env_int("LLM_TIMEOUT", LLMConfig.timeout),
+            headers=proxy_headers(_env("MODAL_PROXY_KEY"), _env("MODAL_PROXY_SECRET")),
         )
         embedding = EmbeddingConfig(
             backend=_env("EMBEDDING_BACKEND", EmbeddingConfig.backend),

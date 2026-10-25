@@ -31,7 +31,9 @@ def embedder():
 
 @st.cache_resource
 def client(base_url: str, model: str):
-    return service.make_client(service.UISettings(base_url=base_url, model=model))
+    s = service.UISettings.from_env()
+    return service.make_client(service.UISettings(base_url=base_url, model=model,
+                                                  proxy_key=s.proxy_key, proxy_secret=s.proxy_secret))
 
 
 @st.cache_data
@@ -45,7 +47,10 @@ with st.sidebar:
     st.header("Cấu hình")
     model = st.text_input("Model Ollama", defaults.model)
     base_url = st.text_input("Địa chỉ Ollama", defaults.base_url)
-    settings = service.UISettings(base_url=base_url, model=model)
+    settings = service.UISettings(base_url=base_url, model=model,
+                                  proxy_key=defaults.proxy_key, proxy_secret=defaults.proxy_secret)
+    if not settings.is_local:
+        st.caption("Qwen chạy trên Modal" + (" (có token)" if settings.headers else " — chưa có MODAL_PROXY_KEY/SECRET"))
     ready, status_msg = service.check_ollama(settings)
     (st.success if ready else st.error)(status_msg)
     if st.button("Kiểm tra lại"):
