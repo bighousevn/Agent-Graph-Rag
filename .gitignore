@@ -33,3 +33,6 @@ data/raw/congbobanan/
 
 # Modal proxy auth token (modal_app.py), never commit
 .modal_proxy.env
+
+# Facebook questions (personal data): never commit; uploaded to a private Kaggle dataset
+data/raw/fb/
