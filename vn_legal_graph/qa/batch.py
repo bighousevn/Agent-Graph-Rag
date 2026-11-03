@@ -90,7 +90,7 @@ def _cite(c: Dict) -> str:
 EXCEL_COLUMNS = [
     ("Mã câu", 18), ("Câu hỏi", 70), ("Câu trả lời của hệ thống", 70), ("Căn cứ hệ thống trích", 36),
     ("Tội danh", 28), ("Điều thẩm định thoả mãn", 30), ("Ứng viên", 40), ("Câu hỏi diễn đạt lại", 50),
-    ("Lỗi định dạng", 10), ("Đánh giá (đúng / một phần / sai)", 16), ("Điều luật đúng (người đánh giá điền)", 30),
+    ("Lỗi định dạng", 10), ("Kiểm tra khoản/điểm (tự động)", 40), ("Đánh giá (đúng / một phần / sai)", 16), ("Điều luật đúng (người đánh giá điền)", 30),
     ("Ghi chú", 30),
 ]
 
@@ -103,8 +103,28 @@ def excel_row(r: Dict) -> List:
         "; ".join(_cite(c) for c in answer.get("dieu_luat", []) if isinstance(c, dict)),
         "; ".join(answer.get("toi_danh", [])), "; ".join(accepted),
         "; ".join((r.get("truy_xuat") or {}).get("ung_vien", [])), r.get("dien_dat_lai", ""),
-        "có" if r.get("tra_loi_loi") else "", "", "", "",
+        "có" if r.get("tra_loi_loi") else "", citation_check_text(r.get("kiem_tra_trich_dan"), r.get("nhac_ma_khong_trich")), "", "", "",
     ]
+
+
+def citation_check_text(rows, not_cited=None) -> str:
+    """One line per citation the answer gave: where its quote sits in the
+    article and whether that is the cited khoản/điểm."""
+    out = []
+    for c in rows or []:
+        if not c["trong_tai_lieu"]:
+            note = "điều không có trong tài liệu đưa vào"
+        elif c["trich_dan_co_that"] is None:
+            note = "không có trích dẫn"
+        elif not c["trich_dan_co_that"]:
+            note = "trích dẫn không có trong điều luật"
+        else:
+            note = f"đúng vị trí ({c['vi_tri'] or 'phần đầu điều'})" if c["khop_vi_tri"] else \
+                f"LỆCH: đoạn trích nằm ở {c['vi_tri'] or 'phần đầu điều'}"
+        out.append(f"{c['cite']}: {note}")
+    if not_cited:
+        out.append(f"Nêu trong câu trả lời nhưng không ghi căn cứ: {', '.join(not_cited)}")
+    return "\n".join(out)
 
 
 def write_excel(path: str, results: List[Dict]) -> None:
@@ -119,7 +139,7 @@ def write_excel(path: str, results: List[Dict]) -> None:
     for j, (name, width) in enumerate(EXCEL_COLUMNS, 1):
         c = ws.cell(row=1, column=j, value=name)
         c.font = Font(name="Arial", bold=True, color="FFFFFF")
-        c.fill = PatternFill("solid", fgColor="1F4E78" if j <= 9 else "C55A11")
+        c.fill = PatternFill("solid", fgColor="1F4E78" if j <= 10 else "C55A11")
         c.alignment = Alignment(wrap_text=True, vertical="center")
         ws.column_dimensions[get_column_letter(j)].width = width
     for i, r in enumerate(results, 2):

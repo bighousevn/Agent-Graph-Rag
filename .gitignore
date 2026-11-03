@@ -36,3 +36,7 @@ data/raw/congbobanan/
 
 # Facebook questions (personal data): never commit; uploaded to a private Kaggle dataset
 data/raw/fb/
+
+# Kaggle results downloaded by hand (may hold the Facebook questions): never commit
+results/
+results.zip

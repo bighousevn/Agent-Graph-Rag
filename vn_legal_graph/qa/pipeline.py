@@ -35,6 +35,7 @@ from ..graph.graph_db import HierarGraph
 from ..judge.judge_law import judge_law, parse_bool
 from ..prompts.vi import (
     JUDGE_LAW_SIMPLE_PROMPT,
+    QA_JUDGE_ELEMENTS_PROMPT,
     LEGAL_ISSUES_PROMPT,
     QA_REWRITE_PROMPT,
     QA_ANSWER_NO_DOCS_PROMPT,
@@ -45,6 +46,7 @@ from ..prompts.vi import (
     RETRIEVE_LAW_PROMPT,
 )
 from ..retrieval.search import cluster_cases, direct_cases
+from .citations import check_citations, mentioned_not_cited
 
 Generate = Callable[..., str]
 Embed = Callable[[str], object]
@@ -82,7 +84,17 @@ DEFAULTS = {
     # An answer shorter than this (words) is asked again once.
     "min_answer_words": 40,
     "judge_mode": "gop",
-    "law_text_chars": 4000,
+    # Element judging for a question: true / false / null (not stated)
+    # with QA_JUDGE_ELEMENTS_PROMPT. False = the case prompt (true/false
+    # only), as before 2026-11.
+    "judge_chua_ro": True,
+    # Show each article's elements found true and false in the answer
+    # prompt (not just the final verdict), at most this many of each.
+    "yeu_to_trong_prompt": 15,
+    # 4000 cut 37 articles (11 BLHS, e.g. 232, 235, 249, 251); the longest
+    # (NĐ 282 Điều 15) is 12,586 chars.
+    "law_text_chars": 13000,
+    "answer_max_tokens": 1536,
     "guidance_chars": 4000,
     # Original two-stage case retrieval: LLM reranks the top-5 clusters (keep
     # n_clusters), then the merged direct + cluster cases (keep 3).
@@ -418,7 +430,10 @@ def retrieve_candidates(
     }
 
 
-def judge_candidate(g: HierarGraph, law_node: str, question: str, generate: Generate, mode: str) -> Dict:
+def judge_candidate(g: HierarGraph, law_node: str, question: str, generate: Generate, mode: str,
+                    chua_ro: bool = False) -> Dict:
+    """ap_dung plus, for articles with judge_dep, the elements answered true
+    ("dung") and false ("sai") and how many were not stated ("so_chua_ro")."""
     d = g.node(law_node)
     law = {
         "entry": d["entry"],
@@ -427,8 +442,10 @@ def judge_candidate(g: HierarGraph, law_node: str, question: str, generate: Gene
         "related_laws": d.get("related_laws") or [],
     }
     if law["judge_dep"]:
-        out = judge_law(generate, question, law, mode)
-        return {"cach": "judge_law", "ap_dung": out["ap_dung"], "so_dung": len(out["dung"]), "so_sai": len(out["sai"])}
+        out = judge_law(generate, question, law, mode, QA_JUDGE_ELEMENTS_PROMPT) if chua_ro else \
+            judge_law(generate, question, law, mode)
+        return {"cach": "judge_law", "ap_dung": out["ap_dung"], "so_dung": len(out["dung"]), "so_sai": len(out["sai"]),
+                "so_chua_ro": len(out["khong_ro"]), "dung": out["dung"], "sai": out["sai"]}
     answer = generate(JUDGE_LAW_SIMPLE_PROMPT.format(law=d["description"], case=question), max_tokens=16)
     return {"cach": "don_gian", "ap_dung": parse_bool(answer) is True}
 
@@ -443,14 +460,31 @@ def render_laws_for_answer(
         text = d["description"][: cfg["law_text_chars"]]
         block = f"[{law_label(g, n)}]"
         if judgments and n in judgments:
-            verdict = "thỏa mãn" if judgments[n]["ap_dung"] else "không thỏa mãn"
-            block += f" (kiểm tra yếu tố cấu thành, chỉ tham khảo: {verdict})"
+            block += "\n" + render_judgment(judgments[n], cfg.get("yeu_to_trong_prompt", 15))
         block += f"\n{text}"
         guidance = pick_guidance(guidance_items(g, n), query_vec, embed, cfg["guidance_chars"])
         if guidance:
             block += f"\nHướng dẫn áp dụng: {guidance}"
         parts.append(block)
     return "\n\n".join(parts)
+
+
+def render_judgment(j: Dict, max_items: int) -> str:
+    """The judge result shown with an article in the answer prompt."""
+    verdict = "thỏa mãn" if j.get("ap_dung") else "không thỏa mãn"
+    lines = [f"Kiểm tra yếu tố cấu thành (chỉ tham khảo): {verdict}"]
+
+    def listed(items: List[str]) -> str:
+        more = len(items) - max_items
+        return "; ".join(items[:max_items]) + (f"; và {more} yếu tố khác" if more > 0 else "")
+
+    if j.get("dung"):
+        lines.append(f"- Câu hỏi đã nêu, thỏa mãn: {listed(j['dung'])}")
+    if j.get("sai"):
+        lines.append(f"- Câu hỏi nêu ngược lại: {listed(j['sai'])}")
+    if j.get("so_chua_ro"):
+        lines.append(f"- Chưa rõ (câu hỏi không nhắc tới): {j['so_chua_ro']} yếu tố")
+    return "\n".join(lines)
 
 
 def parse_answer(text: str) -> Optional[Dict]:
@@ -491,7 +525,7 @@ def answer_question(
     report("tim_dieu", {"ung_vien": [law_label(g, n) for n in retrieval["ung_vien"]]})
     judgments = {}
     for i, n in enumerate(retrieval["ung_vien"], 1):
-        judgments[n] = judge_candidate(g, n, question, generate, cfg["judge_mode"])
+        judgments[n] = judge_candidate(g, n, question, generate, cfg["judge_mode"], cfg["judge_chua_ro"])
         report("tham_dinh", {"xong": i, "tong": len(retrieval["ung_vien"]), "dieu": law_label(g, n),
                              "ap_dung": judgments[n]["ap_dung"]})
     accepted = [n for n in retrieval["ung_vien"] if judgments[n]["ap_dung"]]
@@ -507,7 +541,8 @@ def answer_question(
         question=question, laws=render_laws_for_answer(g, used, cfg, judgments, embed(question), embed)
     )
     report("tra_loi", {"so_dieu": len(used)})
-    raw, answer, retried = answer_with_retry(prompt, generate, cfg["min_answer_words"])
+    raw, answer, retried = answer_with_retry(prompt, generate, cfg["min_answer_words"], cfg["answer_max_tokens"])
+    shown = {law_label(g, n): g.node(n)["description"][: cfg["law_text_chars"]] for n in used}
     return {
         "dien_dat_lai": rewrite,
         "dac_trung": description,
@@ -520,6 +555,8 @@ def answer_question(
         "tra_loi_loi": answer is None,
         "tra_loi_tho": raw if answer is None else None,
         "hoi_lai_vi_ngan": retried,
+        "kiem_tra_trich_dan": check_citations((answer or {}).get("dieu_luat", []), shown),
+        "nhac_ma_khong_trich": mentioned_not_cited(answer or {}),
     }
 
 
@@ -531,15 +568,15 @@ def order_by_confidence(laws: List[str], judgments: Dict[str, Dict], routes: Dic
     return sorted(laws, key=lambda n: (not judgments.get(n, {}).get("ap_dung"), -n_routes[n], rank[n]))
 
 
-def answer_with_retry(prompt: str, generate: Generate, min_words: int):
+def answer_with_retry(prompt: str, generate: Generate, min_words: int, max_tokens: int = 1024):
     """(raw, parsed answer, retried). A terse answer is asked again once,
     with a note; the longer of the two is kept."""
-    raw = generate(prompt, max_tokens=1024)
+    raw = generate(prompt, max_tokens=max_tokens)
     answer = parse_answer(raw)
     n = len((answer or {}).get("cau_tra_loi", "").split())
     if not min_words or n >= min_words:
         return raw, answer, False
-    raw2 = generate(prompt + QA_ANSWER_TOO_SHORT_NOTE.format(n=n), max_tokens=1024)
+    raw2 = generate(prompt + QA_ANSWER_TOO_SHORT_NOTE.format(n=n), max_tokens=max_tokens)
     answer2 = parse_answer(raw2)
     if answer2 and len(answer2.get("cau_tra_loi", "").split()) > n:
         return raw2, answer2, True

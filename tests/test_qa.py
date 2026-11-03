@@ -90,15 +90,18 @@ def test_answer_question_end_to_end_with_fake_llm():
         if "KHÔNG gắn riêng với một tội" in prompt:
             return '[{"van_de": "tình tiết giảm nhẹ", "trich": "Đánh bạc qua app"}]'
         if "Các yếu tố cần xét" in prompt:
+            assert "câu hỏi tư vấn của người dân" in prompt and "null" in prompt  # Q&A judge prompt
             return '{"1": true}'
         if "Yếu tố thỏa mãn" in prompt:
             return "true"
         if "Đánh giá tình huống" in prompt:
             return "false"
         if "luật sư tư vấn" in prompt:
-            assert "[BLHS Điều 321] (kiểm tra yếu tố cấu thành, chỉ tham khảo: thỏa mãn)" in prompt
+            assert "[BLHS Điều 321]\nKiểm tra yếu tố cấu thành (chỉ tham khảo): thỏa mãn" in prompt
+            assert "- Câu hỏi đã nêu, thỏa mãn: Có đánh bạc trái phép không?" in prompt
             return json.dumps({"cau_tra_loi": "Khoản 2 Điều 321.", "toi_danh": ["Tội đánh bạc"],
-                               "dieu_luat": [{"luat": "BLHS", "dieu": "321", "khoan": "2", "diem": "c"}]}, ensure_ascii=False)
+                               "dieu_luat": [{"luat": "BLHS", "dieu": "321", "khoan": "2", "diem": "c",
+                                              "trich_dan": "Tội đánh bạc"}]}, ensure_ascii=False)
         raise AssertionError(prompt[:80])
 
     out = answer_question(g, "Đánh bạc qua app 40 triệu, ma túy?", fake, fake_embed)
@@ -111,6 +114,42 @@ def test_answer_question_end_to_end_with_fake_llm():
     assert not out["tra_loi_loi"]
     assert out["truy_xuat"]["tuyen"]["van_de_phap_ly"][0] == "BLHS Điều 51"
     assert out["hoi_lai_vi_ngan"]  # "Khoản 2 Điều 321." is asked again
+    assert out["judge"]["BLHS Điều 321"]["dung"] == ["Có đánh bạc trái phép không?"]
+    check = out["kiem_tra_trich_dan"][0]
+    assert check["cite"] == "BLHS Điều 321 khoản 2 điểm c" and check["trong_tai_lieu"]
+    assert check["trich_dan_co_that"] and check["khop_vi_tri"] is False  # the text has no khoản 2
+
+
+def test_render_judgment_lists_elements_and_unknown_count():
+    from vn_legal_graph.qa.pipeline import render_judgment
+
+    text = render_judgment({"ap_dung": False, "dung": ["a?", "b?", "c?"], "sai": ["d?"], "so_chua_ro": 4}, max_items=2)
+    assert text.splitlines() == [
+        "Kiểm tra yếu tố cấu thành (chỉ tham khảo): không thỏa mãn",
+        "- Câu hỏi đã nêu, thỏa mãn: a?; b?; và 1 yếu tố khác",
+        "- Câu hỏi nêu ngược lại: d?",
+        "- Chưa rõ (câu hỏi không nhắc tới): 4 yếu tố",
+    ]
+    assert render_judgment({"ap_dung": True}, 15) == "Kiểm tra yếu tố cấu thành (chỉ tham khảo): thỏa mãn"
+
+
+def test_judge_candidate_null_is_not_stated_and_case_prompt_still_available():
+    from vn_legal_graph.qa.pipeline import judge_candidate
+
+    laws = [{**LAWS[0], "items": [{**LAWS[0]["items"][0], "judge_dep": ["Có đánh bạc?", "Trị giá từ 5 triệu?", "Tái phạm?"]}]}]
+    g, _ = build_base_graph(laws, [], fake_embed)
+    seen = []
+
+    def fake(prompt, max_tokens=None):
+        seen.append(prompt)
+        return '{"1": true, "2": null, "3": false}' if "Các yếu tố cần xét" in prompt else "true"
+
+    out = judge_candidate(g, "law:321", "Đánh bạc qua app", fake, "gop", chua_ro=True)
+    assert (out["dung"], out["sai"], out["so_chua_ro"]) == (["Có đánh bạc?"], ["Tái phạm?"], 1)
+    assert "Câu hỏi: Đánh bạc qua app" in seen[0]
+    seen.clear()
+    judge_candidate(g, "law:321", "Đánh bạc qua app", fake, "gop", chua_ro=False)
+    assert "Vụ án: Đánh bạc qua app" in seen[0] and "null" not in seen[0]  # case prompt unchanged
 
 
 def test_hard_filter_option_keeps_original_behaviour():

@@ -177,6 +177,35 @@ Vụ án: {case}
 Trả lời:
 """.strip()
 
+# Q&A variant of JUDGE_ELEMENTS_BATCH_PROMPT (case pipeline unchanged): a
+# question rarely states every fact, and the case prompt's true/false forced
+# every element the question does not mention to false, so the judge
+# rejected articles the lawyers cited (FB set, 2026-11: 41% of the citations
+# matching the reference came from rejected articles). null = not stated.
+QA_JUDGE_ELEMENTS_PROMPT = """
+Bạn là một trợ lý AI pháp lý chuyên nghiệp. Dưới đây là câu hỏi tư vấn của người dân, không phải bản án, nên thường không nêu đủ mọi tình tiết. Với từng yếu tố được đánh số, hãy xác định tình huống trong câu hỏi có thỏa mãn yếu tố đó hay không, dựa trên điều luật và tài liệu bổ trợ.
+
+Cách trả lời từng yếu tố:
+- true: câu hỏi nêu tình tiết thỏa mãn yếu tố (kể cả tình huống giả định do người hỏi đặt ra).
+- false: câu hỏi nêu rõ tình tiết trái với yếu tố (ví dụ số tiền dưới ngưỡng, không có hành vi đó, người thực hiện chưa đủ tuổi).
+- null: câu hỏi không nhắc tới hoặc không đủ dữ kiện để kết luận. Không tự suy đoán thêm tình tiết.
+
+Hướng dẫn phân tích:
+1. Đọc kỹ điều luật, hiểu nội dung và các yếu tố cấu thành.
+2. Nếu tài liệu bổ trợ không trống, dùng nó để giải thích điều luật hoặc yếu tố.
+3. Đối chiếu riêng từng yếu tố với tình tiết trong câu hỏi.
+
+Định dạng đầu ra: chỉ một đối tượng JSON, khóa là số thứ tự của yếu tố (từ "1" đến "{n}"), giá trị là true, false hoặc null, ví dụ {{"1": true, "2": null, "3": false}}. Không thêm chữ nào khác.
+
+Điều luật: {law}
+Tài liệu bổ trợ: {related}
+Các yếu tố cần xét:
+{elements}
+Câu hỏi: {case}
+
+Trả lời:
+""".strip()
+
 JUDGE_LAW_FINAL_PROMPT = """
 Bạn là một trợ lý phân tích pháp lý chuyên nghiệp. Dựa trên điều luật và kết quả phân tích vụ án được cung cấp, hãy đánh giá điều luật này có áp dụng cho vụ án hay không (tức là vụ án có cấu thành tội phạm theo điều luật này không).
 
@@ -305,7 +334,7 @@ Yêu cầu:
 3. Kết luận dứt khoát khi tình huống đã nêu đủ dữ kiện; chỉ nêu điều kiện ("nếu…") khi thực sự thiếu một dữ kiện quyết định.
 4. Chỉ trích các điều luật và văn bản có trong phần tài liệu dưới đây; không trích văn bản không được cung cấp.
 5. Nếu có hướng dẫn áp dụng (Công văn) xử lý tình huống tương tự, ưu tiên làm theo hướng dẫn đó.
-6. Kết quả kiểm tra yếu tố cấu thành kèm theo mỗi điều chỉ để tham khảo; nó có thể sai với câu hỏi giả định hoặc hành vi mới ở mức chuẩn bị.
+6. Mỗi điều có thể kèm kết quả kiểm tra yếu tố cấu thành: các yếu tố câu hỏi đã nêu và thỏa mãn, các yếu tố câu hỏi nêu ngược lại, và số yếu tố chưa rõ. Kết quả này chỉ để tham khảo và có thể sai. Nếu câu hỏi nói rõ điều ngược lại với một yếu tố cơ bản của tội (thường ở khoản 1), không dùng điều đó làm căn cứ áp dụng; chỉ nhắc tới để giải thích vì sao không áp dụng. Yếu tố chưa rõ không phải lý do để loại một điều.
 7. "cau_tra_loi" là một đoạn văn hoàn chỉnh gồm ba phần, theo thứ tự:
    (a) Kết luận: câu đầu tiên trả lời thẳng câu hỏi bằng một câu đầy đủ (có/không bị xử lý, tội gì và khung nào, hoặc phải làm gì). Không mở đầu bằng một khả năng mà câu sau lại bác bỏ.
    (b) Căn cứ: nêu tên văn bản và điều, khoản, điểm áp dụng, kèm nội dung chính của quy định đó.
@@ -314,13 +343,20 @@ Yêu cầu:
 8. Độ dài khoảng 80-200 từ; không chép lại nguyên văn cả điều luật.
 9. Nếu tài liệu được cung cấp không đủ để trả lời, nói rõ là không đủ căn cứ; không bịa điều luật.
 
+Cách chọn khoản, điểm (làm trước khi viết câu trả lời):
+10. Ghi vào "tinh_tiet" các tình tiết có thật trong câu hỏi quyết định khung và điểm: số tiền, giá trị tài sản, tỷ lệ tổn thương cơ thể, khối lượng, số người, hậu quả, cách thức, công cụ, đối tượng bị hại, quan hệ giữa các bên, tiền án tiền sự, giai đoạn tố tụng. Không thêm tình tiết câu hỏi không nêu.
+11. Chọn khoản: đối chiếu "tinh_tiet" với mức, ngưỡng của từng khoản trong điều luật. Không có tình tiết định khung tăng nặng thì chọn khoản quy định cấu thành cơ bản. Không chọn khoản 1 chỉ vì nó đứng đầu.
+12. Chọn điểm: chỉ ghi "diem" khi trong "tinh_tiet" có đúng tình tiết mà điểm đó mô tả. Không mặc định ghi điểm a. Nếu khoản đã chọn không chia điểm, hoặc không tình tiết nào khớp với một điểm, để "diem" là "".
+13. "trich_dan": chép nguyên văn, không sửa chữ, một đoạn ngắn (một câu hoặc một vế) của chính khoản/điểm đã chọn, lấy từ tài liệu dưới đây. Chỉ ghi khoản, điểm thực sự có trong văn bản được cung cấp; nếu không chép được đoạn nào thì bỏ trống "khoan" và "diem".
+
 Đầu ra là một đối tượng JSON duy nhất, không thêm chữ nào khác:
 {{
+"tinh_tiet": ["<tình tiết trong câu hỏi>"],
 "cau_tra_loi": "<đoạn văn 80-200 từ: kết luận, căn cứ, phân tích>",
 "toi_danh": ["<tên tội đầy đủ>"],
-"dieu_luat": [{{"luat": "<BLHS, BLTTHS hoặc tên văn bản khác>", "dieu": "<số điều>", "khoan": "<số khoản>", "diem": "<chữ cái của điểm>"}}]
+"dieu_luat": [{{"luat": "<BLHS, BLTTHS hoặc tên văn bản khác>", "dieu": "<số điều>", "khoan": "<số khoản>", "diem": "<chữ cái của điểm>", "trich_dan": "<đoạn chép nguyên văn của khoản/điểm đó>"}}]
 }}
-Các mục trong <> là chỗ điền, không chép nguyên. Bỏ trống "khoan"/"diem" ("") nếu không xác định; "toi_danh" là [] nếu câu hỏi không về tội danh; "dieu_luat" chỉ gồm các điều thật sự dùng để trả lời.
+Các mục trong <> là chỗ điền, không chép nguyên. Bỏ trống "khoan"/"diem" ("") nếu không xác định; "toi_danh" là [] nếu câu hỏi không về tội danh; "dieu_luat" gồm mọi điều dùng để trả lời, kể cả khi kết luận là không phạm tội hoặc không áp dụng: khi đó ghi điều luật đã dùng để đối chiếu (điều mà hành vi chưa thỏa mãn). Mọi điều được nêu trong "cau_tra_loi" phải có trong "dieu_luat"; "dieu_luat" chỉ rỗng khi câu trả lời không nêu điều luật nào.
 
 Câu hỏi:
 {question}

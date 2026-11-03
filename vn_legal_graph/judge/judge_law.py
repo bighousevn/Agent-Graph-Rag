@@ -100,9 +100,11 @@ def element_prompts(case_text: str, law: Dict) -> List[str]:
     ]
 
 
-def batch_prompt(case_text: str, law: Dict) -> str:
+def batch_prompt(case_text: str, law: Dict, template: str = JUDGE_ELEMENTS_BATCH_PROMPT) -> str:
+    """template: JUDGE_ELEMENTS_BATCH_PROMPT (cases) or QA_JUDGE_ELEMENTS_PROMPT
+    (questions, which may also answer null = not stated)."""
     elements = "\n".join(f"{i}. {e}" for i, e in enumerate(law["judge_dep"], 1))
-    return JUDGE_ELEMENTS_BATCH_PROMPT.format(
+    return template.format(
         n=len(law["judge_dep"]),
         law=law["description"].replace("\n", " "),
         related=render_related(law.get("related_laws")),
@@ -120,7 +122,8 @@ def final_prompt(case_text: str, law: Dict, true_list: List[str], false_list: Li
     )
 
 
-def judge_law(generate: Generate, case_text: str, law: Dict, mode: str = "trung-thanh") -> Dict:
+def judge_law(generate: Generate, case_text: str, law: Dict, mode: str = "trung-thanh",
+              batch_template: str = JUDGE_ELEMENTS_BATCH_PROMPT) -> Dict:
     """Returns {"ap_dung": bool, "dung": [...], "sai": [...], "khong_ro": [...],
     "loi_doc_danh_sach": bool, "tra_loi_cuoi": str}."""
     if mode not in MODES:
@@ -137,7 +140,7 @@ def judge_law(generate: Generate, case_text: str, law: Dict, mode: str = "trung-
             (true_list if verdict else false_list if verdict is False else unknown).append(element)
     elif elements:
         verdicts = parse_numbered_bools(
-            generate(batch_prompt(case_text, law), max_tokens=1024), len(elements)
+            generate(batch_prompt(case_text, law, batch_template), max_tokens=1024), len(elements)
         )
         if verdicts is None:
             batch_failed = True

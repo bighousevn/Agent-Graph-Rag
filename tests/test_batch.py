@@ -54,6 +54,7 @@ def test_excel_row_and_merge_writes_json_and_excel(tmp_path):
     row = excel_row(_result("1"))
     assert row[:6] == ["1", "câu 1", "Theo Điều 321.", "BLHS Điều 321 khoản 1", "Tội đánh bạc", "BLHS Điều 321"]
     assert row[-3:] == ["", "", ""]  # left for the person judging
+    assert row[-4] == ""  # no citation check in an old result
     for k in (1, 2):
         (tmp_path / f"p{k}.json").write_text(json.dumps([_result(str(k))], ensure_ascii=False), encoding="utf-8")
     out = tmp_path / "all.json"
@@ -69,3 +70,18 @@ def test_dry_run_reads_the_file_and_shards(tmp_path):
     res = subprocess.run([sys.executable, "scripts/answer_batch.py", "--input", str(tmp_path / "q.csv"),
                           "--shard", "2/2", "--dry-run"], check=True, capture_output=True, text=True)
     assert "2 câu" in res.stdout and "  1: câu hỏi 1" in res.stdout and "  3: câu hỏi 3" in res.stdout
+
+
+def test_citation_check_text():
+    from vn_legal_graph.qa.batch import citation_check_text
+
+    rows = [{"cite": "BLHS Điều 134 khoản 6 điểm a", "trong_tai_lieu": True, "trich_dan_co_that": True,
+             "vi_tri": "khoản 6", "khop_vi_tri": False},
+            {"cite": "BLHS Điều 134 khoản 1 điểm b", "trong_tai_lieu": True, "trich_dan_co_that": True,
+             "vi_tri": "khoản 1 điểm b", "khop_vi_tri": True},
+            {"cite": "BLHS Điều 173", "trong_tai_lieu": False, "trich_dan_co_that": None, "vi_tri": None, "khop_vi_tri": None}]
+    assert citation_check_text(rows).splitlines() == [
+        "BLHS Điều 134 khoản 6 điểm a: LỆCH: đoạn trích nằm ở khoản 6",
+        "BLHS Điều 134 khoản 1 điểm b: đúng vị trí (khoản 1 điểm b)",
+        "BLHS Điều 173: điều không có trong tài liệu đưa vào"]
+    assert citation_check_text([], ["Điều 174"]) == "Nêu trong câu trả lời nhưng không ghi căn cứ: Điều 174"
