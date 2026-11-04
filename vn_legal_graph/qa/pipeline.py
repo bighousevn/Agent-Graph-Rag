@@ -499,6 +499,26 @@ def parse_answer(text: str) -> Optional[Dict]:
         return None
     data.setdefault("toi_danh", [])
     data.setdefault("dieu_luat", [])
+    return fix_answer_fields(data)
+
+
+def fix_answer_fields(data: Dict) -> Dict:
+    """Citations the model wrote into "toi_danh" ({"luat", "dieu", ...}, 6 of
+    294 answers on the FB run, each with an empty "dieu_luat") are moved to
+    "dieu_luat"; any other non-text crime name is turned into text."""
+    if not isinstance(data.get("toi_danh"), list):
+        data["toi_danh"] = [data["toi_danh"]] if data.get("toi_danh") else []
+    if not isinstance(data.get("dieu_luat"), list):
+        data["dieu_luat"] = [data["dieu_luat"]] if isinstance(data.get("dieu_luat"), dict) else []
+    crimes = []
+    for item in data["toi_danh"]:
+        if isinstance(item, dict) and item.get("dieu"):
+            data["dieu_luat"].append(item)
+        elif isinstance(item, str):
+            crimes.append(item)
+        elif item:
+            crimes.append(json.dumps(item, ensure_ascii=False))
+    data["toi_danh"] = crimes
     return data
 
 

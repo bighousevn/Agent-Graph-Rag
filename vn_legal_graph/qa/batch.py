@@ -101,7 +101,8 @@ def excel_row(r: Dict) -> List:
     return [
         r["id"], r["cau_hoi"], answer.get("cau_tra_loi", ""),
         "; ".join(_cite(c) for c in answer.get("dieu_luat", []) if isinstance(c, dict)),
-        "; ".join(answer.get("toi_danh", [])), "; ".join(accepted),
+        "; ".join(c if isinstance(c, str) else _cite(c) if isinstance(c, dict) else str(c)
+                  for c in answer.get("toi_danh", [])), "; ".join(accepted),
         "; ".join((r.get("truy_xuat") or {}).get("ung_vien", [])), r.get("dien_dat_lai", ""),
         "có" if r.get("tra_loi_loi") else "", citation_check_text(r.get("kiem_tra_trich_dan"), r.get("nhac_ma_khong_trich")), "", "", "",
     ]

@@ -19,6 +19,9 @@ def test_locate_quote_finds_khoan_and_diem():
     assert locate_quote(D134, "dùng VŨ KHÍ,   vật liệu nổ, hung khí nguy hiểm ... nhiều người") == ("1", "a")
     assert locate_quote(D134, "Người nào giết người") is None
     assert locate_quote(D134, "ngắn") is None  # too short to tell
+    # the quote may start with the marker itself (seen on the FB run)
+    assert locate_quote(D134, "b) Dùng a-xít nguy hiểm hoặc hóa chất") == ("1", "b")
+    assert locate_quote(D134, "2. Phạm tội gây thương tích cho người khác") == ("2", "")
 
 
 def test_check_citations_flags_wrong_place_missing_article_and_no_quote():

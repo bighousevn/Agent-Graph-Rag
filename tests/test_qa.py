@@ -65,6 +65,11 @@ def test_parse_helpers():
     assert parse_crime_list("không có") == []
     assert parse_answer('{"cau_tra_loi": "ok"}') == {"cau_tra_loi": "ok", "toi_danh": [], "dieu_luat": []}
     assert parse_answer("không phải json") is None
+    # a citation written into toi_danh (seen on the FB run) goes to dieu_luat
+    moved = parse_answer('{"cau_tra_loi": "ok", "toi_danh": ["Tội lừa đảo", {"luat": "BLHS", "dieu": "174", '
+                         '"khoan": "1", "diem": ""}], "dieu_luat": []}')
+    assert moved["toi_danh"] == ["Tội lừa đảo"]
+    assert moved["dieu_luat"] == [{"luat": "BLHS", "dieu": "174", "khoan": "1", "diem": ""}]
 
 
 LAWS = [

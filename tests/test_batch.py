@@ -55,6 +55,9 @@ def test_excel_row_and_merge_writes_json_and_excel(tmp_path):
     assert row[:6] == ["1", "câu 1", "Theo Điều 321.", "BLHS Điều 321 khoản 1", "Tội đánh bạc", "BLHS Điều 321"]
     assert row[-3:] == ["", "", ""]  # left for the person judging
     assert row[-4] == ""  # no citation check in an old result
+    odd = _result("9")
+    odd["tra_loi"]["toi_danh"] = [{"luat": "BLHS", "dieu": "174", "khoan": "2"}]  # an old result, not fixed
+    assert excel_row(odd)[4] == "BLHS Điều 174 khoản 2"
     for k in (1, 2):
         (tmp_path / f"p{k}.json").write_text(json.dumps([_result(str(k))], ensure_ascii=False), encoding="utf-8")
     out = tmp_path / "all.json"

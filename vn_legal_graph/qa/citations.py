@@ -19,6 +19,7 @@ from .batch import ALIASES
 KHOAN_RE = re.compile(r"^\s*(\d+)\.\s", re.M)
 DIEM_RE = re.compile(r"^\s*([a-zđ])\)\s", re.M)
 MIN_QUOTE_CHARS = 12
+MARKER_SLACK = 6  # longest marker tail after its first char: "12. " / "đ) "
 
 
 def _norm(text: str) -> str:
@@ -56,12 +57,16 @@ def quote_places(article_text: str, quote: str) -> List[Tuple[str, str]]:
         places, pos = [], flat.find(piece)
         while pos != -1:
             at = index[pos]
+            # a marker may start at the quote itself ("a) Vay, mượn..."), so the
+            # search runs a little past it and keeps markers starting by `at`
             khoan, khoan_at = "", -1
-            for m in KHOAN_RE.finditer(text, 0, at + 1):
-                khoan, khoan_at = m.group(1), m.start()
+            for m in KHOAN_RE.finditer(text, 0, at + MARKER_SLACK):
+                if m.start(1) <= at:
+                    khoan, khoan_at = m.group(1), m.start()
             diem = ""
-            for m in DIEM_RE.finditer(text, max(khoan_at, 0), at + 1):
-                diem = m.group(1)
+            for m in DIEM_RE.finditer(text, max(khoan_at, 0), at + MARKER_SLACK):
+                if m.start(1) <= at:
+                    diem = m.group(1)
             if (khoan, diem) not in places:
                 places.append((khoan, diem))
             pos = flat.find(piece, pos + 1)
