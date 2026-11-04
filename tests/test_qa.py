@@ -380,3 +380,17 @@ def test_order_by_confidence():
     routes = {"r1": ["a", "c", "d"], "r2": ["c"], "r3": ["c", "b"]}
     # accepted first (b, d), b found by 1 route, d by 1: kept order; then c (3 routes) before a (1 route)
     assert order_by_confidence(laws, judgments, routes) == ["b", "d", "c", "a"]
+
+
+def test_answer_prompt_asks_role_and_main_question_and_no_point_lists():
+    from vn_legal_graph.prompts.vi import QA_ANSWER_PROMPT
+
+    p = QA_ANSWER_PROMPT.format(question="Tôi bị đánh, phải làm gì?", laws="[BLHS Điều 134]\n...")
+    # the role and the main question come first in the JSON, before the facts
+    out = p[p.index("Đầu ra là"):]
+    assert out.index('"nguoi_hoi"') < out.index('"cau_hoi_chinh"') < out.index('"tinh_tiet"') < out.index('"cau_tra_loi"')
+    assert "không mở đầu bằng \"Không bị xử lý hình sự\"" in p
+    # an article used only for comparison is cited by khoản, without a list of points
+    assert "Không liệt kê lần lượt các điểm của một khoản" in p and "không có điểm f" in p
+    assert "Kết luận không được trái với căn cứ đã nêu" in p
+    assert "Tôi bị đánh, phải làm gì?" in p and "{" in p and "{{" not in p
