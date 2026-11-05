@@ -394,3 +394,38 @@ def test_answer_prompt_asks_role_and_main_question_and_no_point_lists():
     assert "Không liệt kê lần lượt các điểm của một khoản" in p and "không có điểm f" in p
     assert "Kết luận không được trái với căn cứ đã nêu" in p
     assert "Tôi bị đánh, phải làm gì?" in p and "{" in p and "{{" not in p
+
+
+def test_collapse_point_lists_merges_point_runs_and_default_point_a():
+    from vn_legal_graph.qa.pipeline import collapse_point_lists, parse_answer
+
+    run = [{"luat": "BLHS", "dieu": "134", "khoan": "1", "diem": d, "trich_dan": f"q{d}"} for d in "abcde"]
+    out, notes = collapse_point_lists(run + [{"luat": "BLHS", "dieu": "174", "khoan": "2", "diem": "c"}])
+    assert out == [{"luat": "BLHS", "dieu": "134", "khoan": "1", "diem": "", "trich_dan": ""},
+                   {"luat": "BLHS", "dieu": "174", "khoan": "2", "diem": "c"}]
+    assert notes == ["Điều 134 khoản 1: gộp 5 điểm (a, b, c, d, e) thành cả khoản"]
+    # the khoản's own quote is kept when the model also cited the khoản
+    out, _ = collapse_point_lists([{"luat": "BLHS", "dieu": "134", "khoan": "1", "trich_dan": "Người nào"}] + run)
+    assert out == [{"luat": "BLHS", "dieu": "134", "khoan": "1", "trich_dan": "Người nào", "diem": ""}]
+    # two points of one khoản are a real choice, kept
+    assert collapse_point_lists(run[:2])[0] == run[:2]
+    # several mitigating circumstances (Điều 51) often apply together, kept
+    d51 = [{"luat": "BLHS", "dieu": "51", "khoan": "1", "diem": d} for d in "bst"]
+    assert collapse_point_lists(d51) == (d51, [])
+    # point a given to every one of 3+ articles is dropped
+    many_a = [{"luat": "BLHS", "dieu": n, "khoan": "1", "diem": "a"} for n in ("322", "175", "150")]
+    out, notes = collapse_point_lists(many_a + [{"luat": "BLHS", "dieu": "384", "khoan": "1", "diem": ""}])
+    assert [c["diem"] for c in out] == ["", "", "", ""] and notes == ["bỏ điểm a gán cho cả 3 điều"]
+    # but not when another point shows the model did choose
+    mixed = many_a + [{"luat": "BLHS", "dieu": "174", "khoan": "2", "diem": "c"}]
+    assert collapse_point_lists(mixed) == (mixed, [])
+    # parse_answer applies it and keeps the notes
+    ans = parse_answer(json.dumps({"cau_tra_loi": "x", "dieu_luat": run}, ensure_ascii=False))
+    assert len(ans["dieu_luat"]) == 1 and ans["gop_diem"]
+
+
+def test_answer_prompt_limits_the_preparation_khoan():
+    from vn_legal_graph.prompts.vi import QA_ANSWER_PROMPT
+
+    assert "chỉ dùng khi hành vi chưa được thực hiện" in QA_ANSWER_PROMPT
+    assert "tùy kết quả giám định, định giá" in QA_ANSWER_PROMPT

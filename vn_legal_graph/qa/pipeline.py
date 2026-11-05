@@ -519,7 +519,56 @@ def fix_answer_fields(data: Dict) -> Dict:
         elif item:
             crimes.append(json.dumps(item, ensure_ascii=False))
     data["toi_danh"] = crimes
+    data["dieu_luat"], notes = collapse_point_lists(data["dieu_luat"])
+    if notes:
+        data["gop_diem"] = notes
     return data
+
+
+POINT_LIST_MIN = 3
+# BLHS Điều 51 / 52 (mitigating / aggravating circumstances): several points
+# often apply together, so a list of them is kept
+SEVERAL_POINTS_APPLY = {"51", "52"}
+
+
+def collapse_point_lists(citations: List) -> Tuple[List, List[str]]:
+    """Undo point lists the model writes instead of choosing a point. On the
+    FB runs a "not a crime" answer listed every point of khoản 1 (up to 16
+    points of one khoản), or gave each of several articles point a.
+      - POINT_LIST_MIN or more points of the same khoản -> that khoản, no
+        point (its quote kept only if one citation quoted the khoản itself);
+      - POINT_LIST_MIN or more articles, every one cited with point a and no
+        other point -> the point is dropped.
+    Returns the new list and one note per change."""
+    items = [c for c in citations if isinstance(c, dict)]
+    key = lambda c: (str(c.get("luat") or "").strip().lower(), str(c.get("dieu") or "").strip(),
+                     str(c.get("khoan") or "").strip())
+    point = lambda c: str(c.get("diem") or "").strip().lower()
+    groups: Dict[Tuple, List[Dict]] = {}
+    for c in items:
+        groups.setdefault(key(c), []).append(c)
+    notes: List[str] = []
+    out: List[Dict] = []
+    done = set()
+    for c in items:
+        k = key(c)
+        with_point = [x for x in groups[k] if point(x)]
+        if len(with_point) < POINT_LIST_MIN or not k[2] or k[1] in SEVERAL_POINTS_APPLY:
+            out.append(c)
+            continue
+        if k in done:
+            continue
+        done.add(k)
+        plain = next((x for x in groups[k] if not point(x)), None)
+        out.append({**c, "diem": "", "trich_dan": (plain or {}).get("trich_dan", "")})
+        notes.append(f"Điều {k[1]} khoản {k[2]}: gộp {len(with_point)} điểm "
+                     f"({', '.join(point(x) for x in with_point)}) thành cả khoản")
+    pointed = [c for c in out if point(c)]
+    articles = {(key(c)[0], key(c)[1]) for c in pointed}
+    if len(articles) >= POINT_LIST_MIN and all(point(c) == "a" for c in pointed):
+        out = [{**c, "diem": ""} if point(c) else c for c in out]
+        notes.append(f"bỏ điểm a gán cho cả {len(articles)} điều")
+    return out, notes
 
 
 def answer_question(

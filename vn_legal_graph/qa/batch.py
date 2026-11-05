@@ -104,7 +104,9 @@ def excel_row(r: Dict) -> List:
         "; ".join(c if isinstance(c, str) else _cite(c) if isinstance(c, dict) else str(c)
                   for c in answer.get("toi_danh", [])), "; ".join(accepted),
         "; ".join((r.get("truy_xuat") or {}).get("ung_vien", [])), r.get("dien_dat_lai", ""),
-        "có" if r.get("tra_loi_loi") else "", citation_check_text(r.get("kiem_tra_trich_dan"), r.get("nhac_ma_khong_trich")), "", "", "",
+        "có" if r.get("tra_loi_loi") else "",
+        "\n".join(x for x in [citation_check_text(r.get("kiem_tra_trich_dan"), r.get("nhac_ma_khong_trich"))]
+                  + [f"Tự động gộp: {n}" for n in answer.get("gop_diem", [])] if x), "", "", "",
     ]
 
 

@@ -88,3 +88,9 @@ def test_citation_check_text():
         "BLHS Điều 134 khoản 1 điểm b: đúng vị trí (khoản 1 điểm b)",
         "BLHS Điều 173: điều không có trong tài liệu đưa vào"]
     assert citation_check_text([], ["Điều 174"]) == "Nêu trong câu trả lời nhưng không ghi căn cứ: Điều 174"
+
+
+def test_excel_row_notes_collapsed_points():
+    r = _result("5")
+    r["tra_loi"]["gop_diem"] = ["Điều 134 khoản 1: gộp 3 điểm (a, b, c) thành cả khoản"]
+    assert excel_row(r)[9] == "Tự động gộp: Điều 134 khoản 1: gộp 3 điểm (a, b, c) thành cả khoản"
