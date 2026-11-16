@@ -63,6 +63,27 @@ def clean_questions(rows: List[Dict], id_col: str, text_col: str,
     return out, report
 
 
+def parse_ids(spec: str) -> List[str]:
+    """--ids: question ids separated by commas/spaces/new lines, or the path
+    of a file holding them."""
+    import os
+
+    if os.path.isfile(spec):
+        with open(spec, encoding="utf-8-sig") as f:
+            spec = f.read()
+    return [x for x in re.split(r"[\s,;]+", spec) if x]
+
+
+def pick_ids(rows: List[Dict], id_col: str, ids: List[str]) -> List[Dict]:
+    """The rows whose id is in ids, in the file's order; every id must exist."""
+    wanted = {str(i).strip() for i in ids}
+    have = {str(r[id_col]).strip() for r in rows}
+    missing = sorted(wanted - have)
+    if missing:
+        raise KeyError(f"{len(missing)} mã câu không có trong file: {missing[:5]}")
+    return [r for r in rows if str(r[id_col]).strip() in wanted]
+
+
 def write_csv(path: str, rows: List[Dict]) -> None:
     cols = list(rows[0]) if rows else ["id", "cau_hoi"]
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
@@ -88,18 +109,20 @@ def _cite(c: Dict) -> str:
 
 
 EXCEL_COLUMNS = [
-    ("Mã câu", 18), ("Câu hỏi", 70), ("Câu trả lời của hệ thống", 70), ("Căn cứ hệ thống trích", 36),
+    ("STT", 6), ("Mã câu", 18), ("Câu hỏi", 70), ("Câu trả lời của hệ thống", 70), ("Căn cứ hệ thống trích", 36),
     ("Tội danh", 28), ("Điều thẩm định thoả mãn", 30), ("Ứng viên", 40), ("Câu hỏi diễn đạt lại", 50),
     ("Lỗi định dạng", 10), ("Kiểm tra khoản/điểm (tự động)", 40), ("Đánh giá (đúng / một phần / sai)", 16), ("Điều luật đúng (người đánh giá điền)", 30),
     ("Ghi chú", 30),
 ]
 
 
-def excel_row(r: Dict) -> List:
+def excel_row(r: Dict, stt="") -> List:
+    """stt: the row's place in the result file (1, 2, ...), the number the
+    grading sheets use to refer to a question."""
     answer = r.get("tra_loi") or {}
     accepted = [k for k, v in (r.get("judge") or {}).items() if v.get("ap_dung")]
     return [
-        r["id"], r["cau_hoi"], answer.get("cau_tra_loi", ""),
+        stt, r["id"], r["cau_hoi"], answer.get("cau_tra_loi", ""),
         "; ".join(_cite(c) for c in answer.get("dieu_luat", []) if isinstance(c, dict)),
         "; ".join(c if isinstance(c, str) else _cite(c) if isinstance(c, dict) else str(c)
                   for c in answer.get("toi_danh", [])), "; ".join(accepted),
@@ -142,14 +165,14 @@ def write_excel(path: str, results: List[Dict]) -> None:
     for j, (name, width) in enumerate(EXCEL_COLUMNS, 1):
         c = ws.cell(row=1, column=j, value=name)
         c.font = Font(name="Arial", bold=True, color="FFFFFF")
-        c.fill = PatternFill("solid", fgColor="1F4E78" if j <= 10 else "C55A11")
+        c.fill = PatternFill("solid", fgColor="1F4E78" if j <= len(EXCEL_COLUMNS) - 3 else "C55A11")
         c.alignment = Alignment(wrap_text=True, vertical="center")
         ws.column_dimensions[get_column_letter(j)].width = width
     for i, r in enumerate(results, 2):
-        for j, v in enumerate(excel_row(r), 1):
+        for j, v in enumerate(excel_row(r, i - 1), 1):
             c = ws.cell(row=i, column=j, value=v)
             c.font = Font(name="Arial")
             c.alignment = Alignment(wrap_text=True, vertical="top")
-    ws.freeze_panes = "C2"
+    ws.freeze_panes = "D2"
     ws.auto_filter.ref = f"A1:{get_column_letter(len(EXCEL_COLUMNS))}{len(results) + 1}"
     wb.save(path)

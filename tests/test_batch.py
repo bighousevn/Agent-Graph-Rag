@@ -51,13 +51,13 @@ def _result(qid):
 
 
 def test_excel_row_and_merge_writes_json_and_excel(tmp_path):
-    row = excel_row(_result("1"))
-    assert row[:6] == ["1", "câu 1", "Theo Điều 321.", "BLHS Điều 321 khoản 1", "Tội đánh bạc", "BLHS Điều 321"]
+    row = excel_row(_result("1"), 7)
+    assert row[:7] == [7, "1", "câu 1", "Theo Điều 321.", "BLHS Điều 321 khoản 1", "Tội đánh bạc", "BLHS Điều 321"]
     assert row[-3:] == ["", "", ""]  # left for the person judging
     assert row[-4] == ""  # no citation check in an old result
     odd = _result("9")
     odd["tra_loi"]["toi_danh"] = [{"luat": "BLHS", "dieu": "174", "khoan": "2"}]  # an old result, not fixed
-    assert excel_row(odd)[4] == "BLHS Điều 174 khoản 2"
+    assert excel_row(odd)[5] == "BLHS Điều 174 khoản 2"
     for k in (1, 2):
         (tmp_path / f"p{k}.json").write_text(json.dumps([_result(str(k))], ensure_ascii=False), encoding="utf-8")
     out = tmp_path / "all.json"
@@ -65,7 +65,9 @@ def test_excel_row_and_merge_writes_json_and_excel(tmp_path):
                     str(tmp_path / "p2.json"), "--merge-out", str(out)], check=True, capture_output=True)
     assert [r["id"] for r in json.loads(out.read_text(encoding="utf-8"))] == ["1", "2"]
     ws = load_workbook(tmp_path / "all.xlsx").active
-    assert ws["A1"].value == "Mã câu" and ws["A3"].value == "2" and ws.max_row == 3
+    # STT is the place in the merged file, the number the grading sheets use
+    assert ws["A1"].value == "STT" and ws["B1"].value == "Mã câu" and ws.max_row == 3
+    assert (ws["A2"].value, ws["B2"].value, ws["A3"].value, ws["B3"].value) == (1, "1", 2, "2")
 
 
 def test_dry_run_reads_the_file_and_shards(tmp_path):
@@ -73,6 +75,30 @@ def test_dry_run_reads_the_file_and_shards(tmp_path):
     res = subprocess.run([sys.executable, "scripts/answer_batch.py", "--input", str(tmp_path / "q.csv"),
                           "--shard", "2/2", "--dry-run"], check=True, capture_output=True, text=True)
     assert "2 câu" in res.stdout and "  1: câu hỏi 1" in res.stdout and "  3: câu hỏi 3" in res.stdout
+
+
+def test_parse_and_pick_ids(tmp_path):
+    from vn_legal_graph.qa.batch import parse_ids, pick_ids
+
+    (tmp_path / "ids.txt").write_text("3\n1\n", encoding="utf-8")
+    assert parse_ids(str(tmp_path / "ids.txt")) == ["3", "1"]
+    assert parse_ids("3, 1;5") == ["3", "1", "5"]
+    rows = [{"id": str(i), "cau_hoi": f"câu {i}"} for i in range(5)]
+    assert [r["id"] for r in pick_ids(rows, "id", ["3", "1"])] == ["1", "3"]  # file order kept
+    import pytest
+
+    with pytest.raises(KeyError):
+        pick_ids(rows, "id", ["1", "9"])
+
+
+def test_dry_run_with_ids(tmp_path):
+    write_csv(str(tmp_path / "q.csv"), [{"id": str(i), "cau_hoi": f"câu hỏi {i}"} for i in range(6)])
+    res = subprocess.run([sys.executable, "scripts/answer_batch.py", "--input", str(tmp_path / "q.csv"),
+                          "--ids", "4,1,5", "--shard", "1/2", "--dry-run"], check=True, capture_output=True, text=True)
+    assert "2 câu" in res.stdout and "  1: câu hỏi 1" in res.stdout and "  5: câu hỏi 5" in res.stdout
+    bad = subprocess.run([sys.executable, "scripts/answer_batch.py", "--input", str(tmp_path / "q.csv"),
+                          "--ids", "1,99", "--dry-run"], capture_output=True, text=True)
+    assert bad.returncode != 0 and "99" in bad.stderr
 
 
 def test_citation_check_text():
@@ -93,4 +119,4 @@ def test_citation_check_text():
 def test_excel_row_notes_collapsed_points():
     r = _result("5")
     r["tra_loi"]["gop_diem"] = ["Điều 134 khoản 1: gộp 3 điểm (a, b, c) thành cả khoản"]
-    assert excel_row(r)[9] == "Tự động gộp: Điều 134 khoản 1: gộp 3 điểm (a, b, c) thành cả khoản"
+    assert excel_row(r)[10] == "Tự động gộp: Điều 134 khoản 1: gộp 3 điểm (a, b, c) thành cả khoản"

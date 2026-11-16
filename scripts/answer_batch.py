@@ -21,7 +21,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from vn_legal_graph.qa.batch import question_of, read_table, write_excel
+from vn_legal_graph.qa.batch import parse_ids, pick_ids, question_of, read_table, write_excel
 from vn_legal_graph.shard import shard_suffix, take_shard
 
 
@@ -54,6 +54,7 @@ def main() -> None:
     parser.add_argument("--graph", default="outputs/hierargraph.pkl")
     parser.add_argument("--tag", default="")
     parser.add_argument("--limit", type=int, default=0, help="Only the first N questions (a trial).")
+    parser.add_argument("--ids", default="", help="Only these question ids (comma separated, or a file of ids).")
     parser.add_argument("--shard", default="", help="K/N: every N-th question from the K-th (one per GPU).")
     parser.add_argument("--merge", nargs="+", default=[], help="Join shard result files into --merge-out (+ .xlsx).")
     parser.add_argument("--merge-out", default="")
@@ -73,6 +74,11 @@ def main() -> None:
     rows = read_table(args.input)
     if rows and (args.id_col not in rows[0] or args.text_col not in rows[0]):
         raise SystemExit(f"Thiếu cột {args.id_col!r} hoặc {args.text_col!r}; file có: {list(rows[0])}")
+    if args.ids:
+        try:
+            rows = pick_ids(rows, args.id_col, parse_ids(args.ids))
+        except KeyError as e:
+            raise SystemExit(e.args[0])
     if args.limit:
         rows = rows[: args.limit]
     if args.shard:
