@@ -26,7 +26,13 @@ data/raw/anle/
 # embedding cache. Rebuild them with the scripts, then commit again.
 !outputs/hierargraph.pkl
 !data/processed/cases_vn_test.json
-!.cache/emb/
+# The law/case embeddings already in .cache/emb/ stay tracked. New files
+# there are ignored (user's choice 2026-11-25): local runs add embeddings
+# of the Facebook questions, which must not be published. After rebuilding
+# the graph, add the new law embeddings with: git add -f .cache/emb/
+
+# macOS Finder files
+.DS_Store
 
 # congbobanan.toaan.gov.vn, tải lại được: python scripts/crawl_congbobanan.py
 data/raw/congbobanan/
