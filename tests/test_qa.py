@@ -429,3 +429,125 @@ def test_answer_prompt_limits_the_preparation_khoan():
 
     assert "chỉ dùng khi hành vi chưa được thực hiện" in QA_ANSWER_PROMPT
     assert "tùy kết quả giám định, định giá" in QA_ANSWER_PROMPT
+
+
+def test_soft_filter_drops_zero_match_junk_crimes():
+    from vn_legal_graph.qa.pipeline import DEFAULTS, select_articles_for_answer
+
+    candidates = ["law:174", "law:150", "law:175", "law:51", "law:147"]
+    judgments = {
+        "law:174": {"cach": "judge_law", "ap_dung": True, "so_dung": 2},
+        "law:150": {"cach": "judge_law", "ap_dung": False, "so_dung": 0},  # junk crime (mua bán người)
+        "law:175": {"cach": "judge_law", "ap_dung": False, "so_dung": 1},  # partial match kept
+        "law:51": {"cach": "don_gian", "ap_dung": False},
+        "law:147": {"cach": "don_gian", "ap_dung": False},
+    }
+    used, fallback = select_articles_for_answer(candidates, judgments, {**DEFAULTS, "max_rejected_in_answer": 2})
+    assert fallback is False
+    assert "law:150" not in used  # 0-match junk crime dropped
+    assert used == ["law:174", "law:175", "law:51"]
+
+    # When nothing is accepted, falls back with useful articles before zero-match ones
+    none_acc = {k: {**v, "ap_dung": False} for k, v in judgments.items()}
+    used_fb, fb = select_articles_for_answer(candidates, none_acc, {**DEFAULTS, "max_rejected_in_answer": 2})
+    assert fb is True and used_fb[0] == "law:174" and used_fb[-1] == "law:150"
+
+
+def test_answer_with_retry_fixes_hallucinated_article_and_cjk():
+    from vn_legal_graph.qa.pipeline import answer_with_retry
+
+    shown = {"BLHS Điều 65": "Điều 65. Án treo\n1. Khi xử phạt tù không quá 03 năm..."}
+    long_bad = " ".join(["từ"] * 45) + " Theo Điều 69 BLHS, bị hại có 谅解."
+    long_good = " ".join(["từ"] * 45) + " Theo khoản 1 Điều 65 BLHS, đủ điều kiện án treo."
+    answers = iter([
+        json.dumps({"cau_tra_loi": long_bad, "dieu_luat": [{"luat": "BLHS", "dieu": "69", "khoan": "1"}]}, ensure_ascii=False),
+        json.dumps({"cau_tra_loi": long_good, "dieu_luat": [{"luat": "BLHS", "dieu": "65", "khoan": "1",
+                    "trich_dan": "Khi xử phạt tù không quá 03 năm"}]}, ensure_ascii=False),
+    ])
+    prompts = []
+
+    def fake(prompt, max_tokens=None, think=None):
+        prompts.append((prompt, think))
+        return next(answers)
+
+    _, ans, retried = answer_with_retry("p", fake, 40, 3072, think=True, shown_laws=shown, verify_citations=True)
+    assert retried is True
+    assert len(prompts) == 2 and prompts[0][1] is True and prompts[1][1] is True
+    assert "Điều 69" in prompts[1][0] and "chữ Hán" in prompts[1][0]
+    assert ans["dieu_luat"][0]["dieu"] == "65" and "谅解" not in ans["cau_tra_loi"]
+
+
+def test_answer_question_passes_think_and_current_date_only_to_step4():
+    g, _ = build_base_graph(LAWS, [], fake_embed)
+    seen = []
+
+    def fake(prompt, max_tokens=None, think=None):
+        seen.append((prompt, max_tokens, think))
+        if "diễn đạt lại câu hỏi của người dân" in prompt:
+            assert "Thời điểm hiện tại: tháng 11/2026" in prompt
+            return "Hành vi đánh bạc trái phép."
+        if "tối đa ba tội danh" in prompt:
+            return '["Tội đánh bạc"]'
+        if "KHÔNG gắn riêng với một tội" in prompt:
+            return "[]"
+        if "Các yếu tố cần xét" in prompt:
+            return '{"1": true}'
+        if "Yếu tố thỏa mãn" in prompt or "Đánh giá tình huống" in prompt:
+            return "true"
+        if "luật sư tư vấn" in prompt:
+            assert "Thời điểm hiện tại: tháng 11/2026" in prompt
+            return json.dumps({
+                "cau_tra_loi": " ".join(["từ"] * 45) + " Theo Điều 321 BLHS.",
+                "toi_danh": ["Tội đánh bạc"],
+                "dieu_luat": [{"luat": "BLHS", "dieu": "321", "khoan": "", "diem": "", "trich_dan": "Tội đánh bạc"}],
+            }, ensure_ascii=False)
+        raise AssertionError(prompt[:80])
+
+    out = answer_question(g, "Đánh bạc?", fake, fake_embed, {"ngay_hien_tai": "tháng 11/2026"})
+    assert not out["tra_loi_loi"]
+    step4_calls = [(m, t) for p, m, t in seen if "luật sư tư vấn" in p]
+    other_calls = [t for p, _, t in seen if "luật sư tư vấn" not in p]
+    assert step4_calls == [(3072, True)]
+    assert all(t is None for t in other_calls)
+
+
+def test_legal_issues_prompt_does_not_false_flag_common_issues():
+    from vn_legal_graph.prompts.vi import LEGAL_ISSUES_PROMPT
+    from vn_legal_graph.qa.pipeline import copied_from_prompt
+
+    for issue in (
+        "thời hạn giải quyết tố giác",
+        "kháng cáo quá hạn",
+        "thời hạn giám định",
+        "xóa án tích",
+        "án treo",
+        "khiếu nại trong tố tụng hình sự",
+        "thăm gặp người bị tạm giam",
+        "vắng mặt tại nơi cư trú",
+    ):
+        assert copied_from_prompt(issue, LEGAL_ISSUES_PROMPT, "") == [], issue
+
+
+def test_new_laws_thahs_and_tgtg_are_general_and_labeled():
+    from vn_legal_graph.qa.citations import check_citations
+    from vn_legal_graph.qa.pipeline import is_general_law, law_label
+    from vn_legal_graph.qa.scoring import norm_law
+
+    laws = [
+        {"id": 92, "suffix": "", "bo_luat": "THAHS", "title": "Vắng mặt tại nơi cư trú",
+         "items": [{"text": "Điều 92. Vắng mặt tại nơi cư trú\n1. Người được hưởng án treo có thể vắng mặt tại nơi cư trú",
+                    "crime": [], "judge_dep": [], "related_laws": []}]},
+        {"id": 22, "suffix": "", "bo_luat": "TGTG", "title": "Việc gặp thân nhân",
+         "items": [{"text": "Điều 22. Việc gặp thân nhân\n1. Người bị tạm giam được gặp thân nhân một lần trong một tháng",
+                    "crime": [], "judge_dep": [], "related_laws": []}]},
+    ]
+    g, _ = build_base_graph(laws, [], fake_embed)
+    assert is_general_law(g.node("law:thahs:92")) and is_general_law(g.node("law:tgtg:22"))
+    assert law_label(g, "law:thahs:92") == "Luật Thi hành án hình sự Điều 92"
+    assert law_label(g, "law:tgtg:22") == "Luật Thi hành tạm giữ, tạm giam Điều 22"
+    assert norm_law("Luật Thi hành án hình sự") == "THAHS"
+    assert norm_law("Luật Thi hành tạm giữ, tạm giam") == "TGTG"
+    shown = {law_label(g, "law:thahs:92"): g.node("law:thahs:92")["description"]}
+    chk = check_citations([{"luat": "THAHS", "dieu": "92", "khoan": "1",
+                            "trich_dan": "Người được hưởng án treo có thể vắng mặt tại nơi cư trú"}], shown)
+    assert chk[0]["trong_tai_lieu"] and chk[0]["khop_vi_tri"] is True

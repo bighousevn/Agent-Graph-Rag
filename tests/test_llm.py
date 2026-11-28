@@ -157,3 +157,34 @@ def test_ollama_sends_proxy_auth_headers_and_keeps_the_cache_key(tmp_path, monke
     assert sent == [("https://ws--legal-qwen-serve.modal.run/api/chat", {"Modal-Key": "k", "Modal-Secret": "s"})]
     local = LLMConfig(api_key="ollama", model="qwen3:8b-q8_0", provider="ollama", base_url="http://localhost:11434/v1")
     assert LLMClient(AppConfig(llm=local, cache_dir=str(tmp_path)))._cache_path("p", 16) == c._cache_path("p", 16)
+
+
+def test_ollama_per_call_think_override_and_distinct_cache_key(tmp_path, monkeypatch):
+    import requests
+
+    sent = []
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"message": {"content": '{"cau_tra_loi": "ok"}'}, "done_reason": "stop"}
+
+    monkeypatch.setattr(requests, "post", lambda url, json, timeout: sent.append(json) or Resp())
+    cfg = AppConfig(llm=LLMConfig(api_key="ollama", model="qwen3.6:35b-a3b", provider="ollama",
+                                  base_url="http://localhost:11434/v1"), cache_dir=str(tmp_path))
+    c = LLMClient(cfg)
+    c.generate("p", max_tokens=16)
+    c.generate("p", max_tokens=3072, think=True)
+    assert sent[0]["think"] is False
+    assert sent[1]["think"] is True and sent[1]["options"]["num_predict"] == 3072
+    assert c._cache_path("p", 3072) != c._cache_path("p", 3072, think=True)
+
+
+def test_qwen3_openai_think_override_omits_no_think(tmp_path):
+    cfg = AppConfig(llm=LLMConfig(api_key="ollama", model="Qwen/Qwen3-8B", provider="openai"), cache_dir=str(tmp_path))
+    c = LLMClient(cfg)
+    c._client = FakeOpenAI([("<think>2026-2008=18</think>{\"a\": 1}", "stop")])
+    assert c.generate("p", think=True) == '{"a": 1}'
+    assert c._client.calls[0]["messages"][0]["content"] == "p"

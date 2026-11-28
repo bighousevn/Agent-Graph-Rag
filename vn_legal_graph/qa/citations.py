@@ -121,6 +121,17 @@ def check_citations(citations: Sequence, laws: Dict[str, str]) -> List[Dict]:
 
 
 ARTICLE_RE = re.compile(r"\bĐiều\s+(\d+[a-z]?)\b")
+CJK_RE = re.compile(r"[\u4e00-\u9fff]+")
+
+
+def find_cjk(text: str) -> List[str]:
+    """Chinese/CJK tokens leaked into a Vietnamese answer (seen in Qwen3.6-35B)."""
+    seen: List[str] = []
+    for m in CJK_RE.finditer(text or ""):
+        tok = m.group(0)
+        if tok not in seen:
+            seen.append(tok)
+    return seen
 
 
 def mentioned_not_cited(answer: Dict) -> List[str]:
@@ -135,3 +146,36 @@ def mentioned_not_cited(answer: Dict) -> List[str]:
         if n not in cited and f"Điều {n}" not in out:
             out.append(f"Điều {n}")
     return out
+
+
+def answer_issues(answer: Optional[Dict], laws: Dict[str, str]) -> List[str]:
+    """Actionable errors detected deterministically from the answer JSON and
+    the shown article texts: hallucinated articles, fake/misplaced quotes,
+    and leaked CJK characters. Used to decide whether to ask the LLM to
+    self-correct once."""
+    if not answer:
+        return ["Đầu ra không đúng định dạng JSON hợp lệ."]
+    issues: List[str] = []
+    for row in check_citations(answer.get("dieu_luat", []), laws):
+        if not row["trong_tai_lieu"]:
+            issues.append(f"{row['cite']}: điều luật không có trong tài liệu được cung cấp.")
+        elif row["trich_dan_co_that"] is False:
+            issues.append(f"{row['cite']}: đoạn trích dẫn không có nguyên văn trong điều luật.")
+        elif row["khop_vi_tri"] is False:
+            where = row["vi_tri"] or "phần đầu điều"
+            issues.append(f"{row['cite']}: lệch khoản/điểm (đoạn trích thực tế nằm ở {where}).")
+    # Also catch articles named in prose that are neither in dieu_luat nor in any shown law
+    shown_nums = {
+        m.group(1).lower()
+        for label in laws
+        for m in ARTICLE_RE.finditer(unicodedata.normalize("NFC", label))
+    }
+    shown_blob = _norm("\n".join(laws.values()))
+    for art in mentioned_not_cited(answer):
+        num = art.split()[-1].lower()
+        if num not in shown_nums and f"điều {num}" not in shown_blob:
+            issues.append(f"{art} nêu trong câu trả lời không có trong tài liệu được cung cấp.")
+    cjk = find_cjk(str(answer.get("cau_tra_loi") or ""))
+    if cjk:
+        issues.append(f"Câu trả lời có ký tự chữ Hán ({', '.join(cjk)}); phải viết hoàn toàn bằng tiếng Việt.")
+    return issues

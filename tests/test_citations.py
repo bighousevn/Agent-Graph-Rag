@@ -61,3 +61,32 @@ def test_mentioned_not_cited():
               "dieu_luat": [{"luat": "BLHS", "dieu": "51"}]}
     assert mentioned_not_cited(answer) == ["Điều 174", "Điều 2a"]
     assert mentioned_not_cited({"cau_tra_loi": "Không phạm tội.", "dieu_luat": []}) == []
+
+
+def test_find_cjk_and_answer_issues():
+    from vn_legal_graph.qa.citations import answer_issues, find_cjk
+
+    assert find_cjk("Bị hại có 谅解 và thẩm quyền 管辖.") == ["谅解", "管辖"]
+    assert find_cjk("Hoàn toàn bằng tiếng Việt chuẩn.") == []
+
+    laws = {"BLHS Điều 134": D134}
+    clean = {
+        "cau_tra_loi": "Hành vi dùng hung khí nguy hiểm cấu thành tội theo điểm a khoản 1 Điều 134 BLHS.",
+        "dieu_luat": [{"luat": "BLHS", "dieu": "134", "khoan": "1", "diem": "a",
+                       "trich_dan": "Dùng vũ khí, vật liệu nổ, hung khí nguy hiểm"}],
+    }
+    assert answer_issues(clean, laws) == []
+
+    bad = {
+        "cau_tra_loi": "Theo Điều 20 BLTTHS, hành vi gây 恥辱 bị đình chỉ.",
+        "dieu_luat": [
+            {"luat": "BLHS", "dieu": "69", "khoan": "1", "trich_dan": "án treo"},
+            {"luat": "BLHS", "dieu": "134", "khoan": "6", "diem": "a",
+             "trich_dan": "chuẩn bị vũ khí, vật liệu nổ, hung khí nguy hiểm"},
+        ],
+    }
+    issues = answer_issues(bad, laws)
+    assert any("Điều 69" in x for x in issues)
+    assert any("lệch khoản/điểm" in x for x in issues)
+    assert any("Điều 20" in x for x in issues)
+    assert any("chữ Hán" in x and "恥辱" in x for x in issues)

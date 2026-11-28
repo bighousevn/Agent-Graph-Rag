@@ -279,10 +279,10 @@ Trả lời:
 # matched to article titles. (Kaggle 2026-10-10: the graph missed 85/127
 # general-part and 27/30 BLTTHS articles the lawyers cited.)
 LEGAL_ISSUES_PROMPT = """
-Bạn là luật sư hình sự. Đọc câu hỏi dưới đây và tìm những điểm mà câu trả lời cần tới quy định KHÔNG gắn riêng với một tội: quy định chung của Bộ luật Hình sự (áp dụng cho mọi tội) hoặc quy định của Bộ luật Tố tụng hình sự (cách giải quyết vụ án).
+Bạn là luật sư hình sự. Đọc câu hỏi dưới đây và tìm những điểm mà câu trả lời cần tới quy định KHÔNG gắn riêng với một tội: quy định chung của Bộ luật Hình sự (áp dụng cho mọi tội), quy định của Bộ luật Tố tụng hình sự (cách giải quyết vụ án), hoặc quy định về thi hành án, tạm giữ, tạm giam.
 
 Cách làm:
-1. Tìm trong câu hỏi từng chi tiết dẫn tới một quy định như vậy.
+1. Tìm trong câu hỏi từng chi tiết dẫn tới một quy định như vậy. Phân biệt rõ giai đoạn vụ việc (tin báo, điều tra, giám định, xét xử, kháng cáo, tạm giam, án treo) và quyền, nghĩa vụ của từng bên liên quan.
 2. Với mỗi chi tiết, đặt tên vấn đề bằng một cụm từ ngắn, dùng thuật ngữ pháp lý nói đúng về chi tiết đó.
 3. Chép nguyên văn đoạn trong câu hỏi chứa chi tiết đó.
 
@@ -307,11 +307,12 @@ Danh sách JSON:
 # is written in legal terms, so the question is restated in legal language
 # and that text drives the vector searches and the LLM guesses.
 QA_REWRITE_PROMPT = """
-Bạn là luật sư hình sự. Hãy diễn đạt lại câu hỏi của người dân dưới đây bằng ngôn ngữ pháp lý hình sự, để tra cứu Bộ luật Hình sự và Bộ luật Tố tụng hình sự.
+Bạn là luật sư hình sự. Hãy diễn đạt lại câu hỏi của người dân dưới đây bằng ngôn ngữ pháp lý hình sự, để tra cứu Bộ luật Hình sự, Bộ luật Tố tụng hình sự và các luật thi hành án, tạm giữ, tạm giam.
 
 Yêu cầu:
-- Giữ đủ mọi tình tiết trong câu hỏi: ai làm gì, với ai, hậu quả, số tiền, khối lượng, độ tuổi, quan hệ giữa các bên, giai đoạn tố tụng.
-- Thay từ ngữ đời thường bằng thuật ngữ mà Bộ luật Hình sự và Bộ luật Tố tụng hình sự dùng để gọi hành vi, chủ thể, hậu quả và thủ tục đó.
+- Giữ đủ mọi tình tiết trong câu hỏi: ai làm gì, với ai, hậu quả, số tiền, khối lượng, độ tuổi (hoặc ngày/tháng/năm sinh), quan hệ giữa các bên, giai đoạn tố tụng.
+- Xác định đúng chủ thể thực hiện hành vi và người chịu hậu quả; không đảo ngược vai trò giữa các bên khi câu hỏi viết theo khẩu ngữ.
+- Thay từ ngữ đời thường bằng thuật ngữ pháp lý phù hợp. Nếu câu hỏi có tiếng lóng hoặc từ viết tắt không chắc nghĩa, giữ nguyên từ đó hoặc mô tả trung tính theo ngữ cảnh; tuyệt đối không tự đoán thành một tội danh cụ thể không có trong câu hỏi.
 - Nêu rõ câu hỏi muốn biết điều gì (có phạm tội không, tội gì, khung hình phạt nào, thủ tục hay quyền gì).
 - Không thêm tình tiết không có trong câu hỏi; không trả lời, không kết luận; không ghi số điều luật.
 - Chỉ xuất đoạn diễn đạt lại, 1 đến 3 câu, không thêm lời dẫn.
@@ -337,23 +338,28 @@ Yêu cầu:
 1. Xác định hành vi trong tình huống cấu thành tội gì (nếu có) và áp dụng điều, khoản, điểm nào; hoặc, với câu hỏi về thủ tục, quy định nào giải quyết vấn đề.
 2. Nêu rõ căn cứ: tên văn bản và điều, khoản, điểm.
 3. Kết luận dứt khoát khi tình huống đã nêu đủ dữ kiện; chỉ nêu điều kiện ("nếu…") khi thực sự thiếu một dữ kiện quyết định. Kết luận không được trái với căn cứ đã nêu: nếu tình tiết đã đạt mức, ngưỡng của khoản được trích (ví dụ số tiền đánh bạc từ 5.000.000 đồng, phạm tội 02 lần trở lên) thì không kết luận là không phạm tội hoặc không thuộc khoản đó.
-4. Chỉ trích các điều luật và văn bản có trong phần tài liệu dưới đây; không trích văn bản không được cung cấp.
+4. Chỉ trích các điều luật và văn bản có trong phần tài liệu dưới đây; không trích văn bản không được cung cấp và không nhắc tên tội danh hay điều luật không liên quan đến câu hỏi.
 5. Nếu có hướng dẫn áp dụng (Công văn) xử lý tình huống tương tự, ưu tiên làm theo hướng dẫn đó.
-6. Mỗi điều có thể kèm kết quả kiểm tra yếu tố cấu thành: các yếu tố câu hỏi đã nêu và thỏa mãn, các yếu tố câu hỏi nêu ngược lại, và số yếu tố chưa rõ. Kết quả này chỉ để tham khảo và có thể sai. Nếu câu hỏi nói rõ điều ngược lại với một yếu tố cơ bản của tội (thường ở khoản 1), không dùng điều đó làm căn cứ áp dụng; chỉ nhắc tới để giải thích vì sao không áp dụng. Yếu tố chưa rõ không phải lý do để loại một điều.
+6. Mỗi điều có thể kèm kết quả kiểm tra yếu tố cấu thành: các yếu tố câu hỏi đã nêu và thỏa mãn, các yếu tố câu hỏi nêu ngược lại, và số yếu tố chưa rõ. Kết quả này chỉ để tham khảo và có thể sai. Nếu câu hỏi nói rõ điều ngược lại với một yếu tố cơ bản của tội (thường ở khoản 1, kể cả điều kiện độ tuổi chủ thể như "người nào đủ 18 tuổi trở lên"), không dùng điều đó làm căn cứ áp dụng; chỉ nhắc tới để giải thích vì sao không áp dụng. Yếu tố chưa rõ không phải lý do để loại một điều.
 7. "cau_tra_loi" là một đoạn văn hoàn chỉnh gồm ba phần, theo thứ tự:
    (a) Kết luận: câu đầu tiên trả lời thẳng "cau_hoi_chinh" bằng một câu đầy đủ (ai có thể bị xử lý về tội gì và khung nào, người hỏi có bị liên lụy không, hoặc người hỏi phải làm gì). Không mở đầu bằng một khả năng mà câu sau lại bác bỏ.
    (b) Căn cứ: nêu tên văn bản và điều, khoản, điểm áp dụng, kèm nội dung chính của quy định đó.
    (c) Phân tích: đối chiếu tình tiết trong câu hỏi với quy định để giải thích vì sao đi đến kết luận; nêu điều kiện nếu thiếu dữ kiện quyết định.
    Tuyệt đối không trả lời cụt lủn bằng một chữ hoặc một câu ngắn ("Có", "Không", "Bị phạt tù").
-8. Độ dài khoảng 80-200 từ; không chép lại nguyên văn cả điều luật.
-9. Nếu tài liệu được cung cấp không đủ để trả lời, nói rõ là không đủ căn cứ; không bịa điều luật.
+8. Độ dài khoảng 80-200 từ; không chép lại nguyên văn cả điều luật. Viết 100% bằng tiếng Việt chuẩn, tuyệt đối không chen chữ Hán hay ngoại ngữ.
+9. Nếu tài liệu được cung cấp không có quy định trực tiếp trả lời câu hỏi, nói rõ là tài liệu hiện có chưa đủ căn cứ / không quy định cụ thể; không bịa điều luật và không tự suy diễn tuyệt đối ("phải có", "chỉ có...").
+10. Kiểm tra kỹ số liệu, phép tính và ranh giới pháp lý:
+   - Tính chính xác tuổi từ ngày/tháng/năm sinh so với thời điểm hiện tại, tổng giá trị tài sản thực tế bị chiếm đoạt (nhân/cộng đầy đủ nếu có nhiều người hoặc nhiều lần; không lấy tổng doanh số giao dịch nếu chỉ chiếm đoạt một phần).
+   - Đối chiếu đúng từng ngưỡng phần trăm tổn thương cơ thể, số tiền, khối lượng và điều kiện chủ thể ghi nguyên văn trong điều luật được cung cấp; không nhớ nhầm ngưỡng của điều luật khác.
+   - Với tranh chấp hợp đồng, vay mượn, mua bán hàng hóa không đúng chất lượng: phân biệt rõ vi phạm nghĩa vụ dân sự với thủ đoạn gian dối ngay từ đầu hoặc bỏ trốn để chiếm đoạt.
+   - Dùng đúng thuật ngữ tố tụng hình sự Việt Nam: không dùng "khởi kiện vụ án hình sự" hay "nộp đơn khởi kiện ra Tòa để truy cứu trách nhiệm hình sự" (dùng "tố giác tội phạm", "yêu cầu khởi tố" gửi Cơ quan điều tra hoặc Viện kiểm sát); không dùng "kháng cáo" đối với hành vi/quyết định của Cơ quan điều tra (dùng "khiếu nại"). Không khẳng định rút đơn sẽ đình chỉ vụ án nếu tội/khung không thuộc trường hợp khởi tố theo yêu cầu của bị hại (khoản 1 Điều 155 BLTTHS).
 
 Cách chọn khoản, điểm (làm trước khi viết câu trả lời):
-10. Ghi vào "tinh_tiet" các tình tiết có thật trong câu hỏi quyết định khung và điểm: số tiền, giá trị tài sản, tỷ lệ tổn thương cơ thể, khối lượng, số người, hậu quả, cách thức, công cụ, đối tượng bị hại, quan hệ giữa các bên, tiền án tiền sự, giai đoạn tố tụng. Không thêm tình tiết câu hỏi không nêu.
-11. Chọn khoản: đối chiếu "tinh_tiet" với mức, ngưỡng của từng khoản trong điều luật. Không có tình tiết định khung tăng nặng thì chọn khoản quy định cấu thành cơ bản. Không chọn khoản 1 chỉ vì nó đứng đầu. Khoản quy định việc chuẩn bị phạm tội (ví dụ "Người nào chuẩn bị vũ khí… nhằm gây thương tích") chỉ dùng khi hành vi chưa được thực hiện; nếu đã đánh, đâm, chém, gây thương tích thì chọn khoản theo hậu quả và tình tiết. Khi khoản phụ thuộc một số liệu câu hỏi chưa nêu (tỷ lệ tổn thương cơ thể, giá trị tài sản, khối lượng), nêu khoản ứng với dữ kiện đã có và nói rõ khoản nặng hơn tùy kết quả giám định, định giá; hậu quả nặng như vỡ, nứt xương, phải phẫu thuật thì nói rõ có thể thuộc khoản cao hơn.
-12. Chọn điểm: chỉ ghi "diem" khi trong "tinh_tiet" có đúng tình tiết mà điểm đó mô tả. Không mặc định ghi điểm a. Nếu khoản đã chọn không chia điểm, hoặc không tình tiết nào khớp với một điểm, để "diem" là "". Không liệt kê lần lượt các điểm của một khoản; mỗi điểm ghi ra phải ứng với một tình tiết riêng trong "tinh_tiet". Chữ cái của điểm lấy đúng như trong văn bản (a, b, c, d, đ, e, g, h, i, k…; không có điểm f).
-13. Điều chỉ dùng để đối chiếu (kết luận là không phạm tội hoặc không áp dụng điều đó): ghi một mục với điều và khoản quy định cấu thành cơ bản, "diem" để "". Chỉ ghi những điều thực sự được bàn trong "cau_tra_loi", không kể thêm các điều khác trong tài liệu.
-14. "trich_dan": chép nguyên văn, không sửa chữ, một đoạn ngắn (một câu hoặc một vế) của chính khoản/điểm đã chọn, lấy từ tài liệu dưới đây. Chỉ ghi khoản, điểm thực sự có trong văn bản được cung cấp; nếu không chép được đoạn nào thì bỏ trống "khoan" và "diem".
+11. Ghi vào "tinh_tiet" các tình tiết có thật trong câu hỏi quyết định khung và điểm: số tiền (kèm phép tính nếu cần), giá trị tài sản, tỷ lệ tổn thương cơ thể, khối lượng, số người, hậu quả, cách thức, công cụ, đối tượng bị hại, độ tuổi các bên, quan hệ giữa các bên, tiền án tiền sự, giai đoạn tố tụng. Không thêm tình tiết câu hỏi không nêu.
+12. Chọn khoản: đối chiếu "tinh_tiet" với mức, ngưỡng của từng khoản trong điều luật. Không có tình tiết định khung tăng nặng thì chọn khoản quy định cấu thành cơ bản. Không chọn khoản 1 chỉ vì nó đứng đầu. Khoản quy định việc chuẩn bị phạm tội (ví dụ "Người nào chuẩn bị vũ khí… nhằm gây thương tích") chỉ dùng khi hành vi chưa được thực hiện; nếu đã đánh, đâm, chém, gây thương tích thì chọn khoản theo hậu quả và tình tiết. Khi khoản phụ thuộc một số liệu câu hỏi chưa nêu (tỷ lệ tổn thương cơ thể, giá trị tài sản, khối lượng), nêu khoản ứng với dữ kiện đã có và nói rõ khoản nặng hơn tùy kết quả giám định, định giá; hậu quả nặng như vỡ, nứt xương, phải phẫu thuật thì nói rõ có thể thuộc khoản cao hơn.
+13. Chọn điểm: chỉ ghi "diem" khi trong "tinh_tiet" có đúng tình tiết mà điểm đó mô tả. Không mặc định ghi điểm a. Nếu khoản đã chọn không chia điểm, hoặc không tình tiết nào khớp với một điểm, để "diem" là "". Không liệt kê lần lượt các điểm của một khoản; mỗi điểm ghi ra phải ứng với một tình tiết riêng trong "tinh_tiet". Chữ cái của điểm lấy đúng như trong văn bản (a, b, c, d, đ, e, g, h, i, k…; không có điểm f).
+14. Điều chỉ dùng để đối chiếu (kết luận là không phạm tội hoặc không áp dụng điều đó): ghi một mục với điều và khoản quy định cấu thành cơ bản, "diem" để "". Chỉ ghi những điều thực sự được bàn trong "cau_tra_loi", không kể thêm các điều khác trong tài liệu.
+15. "trich_dan": chép nguyên văn, không sửa chữ, một đoạn ngắn (một câu hoặc một vế) của chính khoản/điểm đã chọn, lấy từ tài liệu dưới đây. Chỉ ghi khoản, điểm thực sự có trong văn bản được cung cấp; nếu không chép được đoạn nào thì bỏ trống "khoan" và "diem".
 
 Đầu ra là một đối tượng JSON duy nhất, không thêm chữ nào khác:
 {{
@@ -364,7 +370,7 @@ Cách chọn khoản, điểm (làm trước khi viết câu trả lời):
 "toi_danh": ["<tên tội đầy đủ>"],
 "dieu_luat": [{{"luat": "<BLHS, BLTTHS hoặc tên văn bản khác>", "dieu": "<số điều>", "khoan": "<số khoản>", "diem": "<chữ cái của điểm>", "trich_dan": "<đoạn chép nguyên văn của khoản/điểm đó>"}}]
 }}
-Các mục trong <> là chỗ điền, không chép nguyên. Bỏ trống "khoan"/"diem" ("") nếu không xác định; "toi_danh" là [] nếu câu hỏi không về tội danh; "dieu_luat" gồm mọi điều dùng để trả lời, kể cả khi kết luận là không phạm tội hoặc không áp dụng: khi đó ghi điều luật đã dùng để đối chiếu theo mục 13. Mọi điều được nêu trong "cau_tra_loi" phải có trong "dieu_luat"; "dieu_luat" chỉ rỗng khi câu trả lời không nêu điều luật nào.
+Các mục trong <> là chỗ điền, không chép nguyên. Bỏ trống "khoan"/"diem" ("") nếu không xác định; "toi_danh" là [] nếu câu hỏi không về tội danh; "dieu_luat" gồm mọi điều dùng để trả lời, kể cả khi kết luận là không phạm tội hoặc không áp dụng: khi đó ghi điều luật đã dùng để đối chiếu theo mục 14. Mọi điều được nêu trong "cau_tra_loi" phải có trong "dieu_luat"; "dieu_luat" chỉ rỗng khi câu trả lời không nêu điều luật nào.
 
 Câu hỏi:
 {question}
@@ -506,4 +512,13 @@ Vụ án:
 QA_ANSWER_TOO_SHORT_NOTE = """
 
 LƯU Ý: lần trả lời trước chỉ có {n} từ, quá ngắn và không đạt yêu cầu. Hãy trả lời lại theo đúng cấu trúc đã yêu cầu: kết luận bằng câu đầy đủ, căn cứ (điều, khoản, điểm và nội dung quy định), phân tích tình tiết; khoảng 80-200 từ.
+""".rstrip()
+
+# Second try when deterministic citation/CJK checks find hallucinated articles,
+# mismatched khoản/điểm, fake quotes, or leaked Chinese characters.
+QA_ANSWER_FIX_NOTE = """
+
+LƯU Ý CẦN SỬA LẠI (máy kiểm tra tự động phát hiện các lỗi sau ở lần trả lời trước):
+{issues}
+Hãy trả lời lại bằng một đối tượng JSON hợp lệ, sửa dứt điểm mọi lỗi trên: chỉ dùng điều luật có trong tài liệu được cung cấp, chép nguyên văn đúng khoản/điểm, viết 100% tiếng Việt không có chữ Hán.
 """.rstrip()

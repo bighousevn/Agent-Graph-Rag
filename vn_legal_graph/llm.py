@@ -78,7 +78,13 @@ class LLMClient:
             )
         return self._client
 
-    def _cache_path(self, prompt: str, max_tokens: Optional[int] = None) -> str:
+    def _use_think(self, think: Optional[bool] = None) -> bool:
+        return (self.llm_config.thinking == "enabled") if think is None else bool(think)
+
+    def _cache_path(
+        self, prompt: str, max_tokens: Optional[int] = None, think: Optional[bool] = None
+    ) -> str:
+        use_think = self._use_think(think)
         fields = {
             "model": self.llm_config.model,
             "temperature": self.llm_config.temperature,
@@ -88,8 +94,12 @@ class LLMClient:
         # written before this field existed (default limit) stay valid.
         if max_tokens is not None:
             fields["max_tokens"] = max_tokens
-        if self.llm_config.provider == "deepseek" and self.llm_config.thinking == "enabled":
+        if self.llm_config.provider == "deepseek" and use_think:
             fields["thinking"] = "enabled"
+        elif use_think:
+            fields["think"] = True
+        elif think is False and self.llm_config.thinking == "enabled":
+            fields["think"] = False
         if self.llm_config.provider == "ollama":
             fields["ollama_native"] = True  # not the /v1 answers of the first Kaggle run
         key = json.dumps(
@@ -102,9 +112,13 @@ class LLMClient:
         os.makedirs(cache_dir, exist_ok=True)
         return os.path.join(cache_dir, f"{digest}.json")
 
-    def _request_kwargs(self, prompt: str, max_tokens: Optional[int]) -> dict:
+    def _request_kwargs(
+        self, prompt: str, max_tokens: Optional[int], think: Optional[bool] = None
+    ) -> dict:
         cfg = self.llm_config
-        if no_think(cfg.model, cfg.thinking):
+        use_think = self._use_think(think)
+        thinking_str = "enabled" if use_think else "disabled"
+        if no_think(cfg.model, thinking_str):
             prompt = prompt + "\n/no_think"
         kwargs = {
             "model": cfg.model,
@@ -116,24 +130,27 @@ class LLMClient:
             # DeepSeek V4 models think by default; switched off unless asked,
             # so short answers (true/false, JSON) are not eaten by reasoning
             # and temperature still applies.
-            kwargs["extra_body"] = {"thinking": {"type": cfg.thinking}}
-            if cfg.thinking == "enabled":
+            kwargs["extra_body"] = {"thinking": {"type": thinking_str}}
+            if use_think:
                 kwargs["max_tokens"] = max(kwargs["max_tokens"], 8192)
                 return kwargs
         kwargs["temperature"] = cfg.temperature
         return kwargs
 
-    def _ollama_chat(self, prompt: str, max_tokens: Optional[int]):
+    def _ollama_chat(
+        self, prompt: str, max_tokens: Optional[int], think: Optional[bool] = None
+    ):
         """(text, truncated) from Ollama's native /api/chat."""
         import requests
 
         cfg = self.llm_config
+        use_think = self._use_think(think)
         limit = max_tokens or cfg.max_tokens
         body = {
             "model": cfg.model,
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
-            "think": cfg.thinking == "enabled",
+            "think": use_think,
             "options": {"temperature": cfg.temperature, "num_predict": max(limit, OLLAMA_MIN_PREDICT)},
         }
         url = re.sub(r"/v1/?$", "", cfg.base_url.rstrip("/")) + "/api/chat"
@@ -149,10 +166,15 @@ class LLMClient:
         max_tokens: Optional[int] = None,
         retries: int = 3,
         retry_delay: float = 2.0,
+        think: Optional[bool] = None,
     ) -> str:
         """Send a single-turn prompt to the configured LLM and return the
         text response. Cached on disk when config.cache_llm_calls is True."""
-        cache_path = self._cache_path(prompt, max_tokens) if self.config.cache_llm_calls else None
+        cache_path = (
+            self._cache_path(prompt, max_tokens, think=think)
+            if self.config.cache_llm_calls
+            else None
+        )
         if cache_path and os.path.exists(cache_path):
             with open(cache_path, "r", encoding="utf-8") as f:
                 return json.load(f)["response"]
@@ -162,9 +184,11 @@ class LLMClient:
         for attempt in range(1, retries + 1):
             try:
                 if client is None:
-                    text, truncated = self._ollama_chat(prompt, max_tokens)
+                    text, truncated = self._ollama_chat(prompt, max_tokens, think=think)
                 else:
-                    resp = client.chat.completions.create(**self._request_kwargs(prompt, max_tokens))
+                    resp = client.chat.completions.create(
+                        **self._request_kwargs(prompt, max_tokens, think=think)
+                    )
                     choice = resp.choices[0]
                     text = strip_think(choice.message.content or "")
                     truncated = choice.finish_reason == "length"

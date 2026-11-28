@@ -24,6 +24,8 @@ Not done: splitting by defendant (a Q&A situation has no defendant list).
 from __future__ import annotations
 
 import ast
+import datetime
+import inspect
 import json
 import re
 from typing import Callable, Dict, List, Optional, Tuple
@@ -38,6 +40,7 @@ from ..prompts.vi import (
     QA_JUDGE_ELEMENTS_PROMPT,
     LEGAL_ISSUES_PROMPT,
     QA_REWRITE_PROMPT,
+    QA_ANSWER_FIX_NOTE,
     QA_ANSWER_NO_DOCS_PROMPT,
     QA_ANSWER_PROMPT,
     QA_ANSWER_TOO_SHORT_NOTE,
@@ -46,7 +49,7 @@ from ..prompts.vi import (
     RETRIEVE_LAW_PROMPT,
 )
 from ..retrieval.search import cluster_cases, direct_cases
-from .citations import check_citations, mentioned_not_cited
+from .citations import answer_issues, check_citations, mentioned_not_cited
 
 Generate = Callable[..., str]
 Embed = Callable[[str], object]
@@ -56,12 +59,14 @@ DEFAULTS = {
     "n_clusters": 2,
     "top_k_laws_text": 5,
     "top_k_guidance": 3,
-    "max_candidates": 8,
+    # 10 (up from 8): llm_doan_toi (<=6) + huong_dan (<=3) no longer crowd out
+    # van_ban_luat (full-text search); junk articles are pruned by loc_mem.
+    "max_candidates": 10,
     # Route "van_de_phap_ly": the LLM names general legal issues, matched to
-    # titles of BLHS general-part (Điều 1-107) and BLTTHS articles; up to
+    # titles of BLHS general-part (Điều 1-107), BLTTHS, THAHS, and TGTG; up to
     # general_slots of them are added after the max_candidates others, so
     # they are not crowded out by crime articles.
-    "general_slots": 4,
+    "general_slots": 6,
     "laws_per_issue": 2,
     "max_issues": 5,
     # Crime route: each crime the LLM names goes to its nearest Crime nodes
@@ -95,6 +100,17 @@ DEFAULTS = {
     # (NĐ 282 Điều 15) is 12,586 chars.
     "law_text_chars": 13000,
     "answer_max_tokens": 1536,
+    # Enable reasoning ("think": True) ONLY for the final answer step so a
+    # small-active MoE (e.g. Qwen3.6-35B-A3B) checks age/amount arithmetic and
+    # statute thresholds before writing JSON, while keeping judge calls fast.
+    "answer_think": True,
+    "answer_think_max_tokens": 3072,
+    # Retry once if deterministic checks catch hallucinated articles, fake or
+    # misplaced quotes, or leaked Chinese characters.
+    "tu_sua_loi_trich_dan": True,
+    # Reference month/year shown to the model for birth-date age calculation
+    # ("" -> current month/year, e.g. "tháng 11/2026").
+    "ngay_hien_tai": "",
     "guidance_chars": 4000,
     # Original two-stage case retrieval: LLM reranks the top-5 clusters (keep
     # n_clusters), then the merged direct + cluster cases (keep 3).
@@ -102,14 +118,53 @@ DEFAULTS = {
     "rerank_clusters_from": 5,
     "rerank_cases_keep": 3,
     # True = the original: answer only from articles judge_law accepted.
-    # False (default for Q&A) = every candidate, with the judge verdict shown
-    # as a hint; run 1 lost the right article for hypothetical questions.
+    # False (default for Q&A) = keep accepted + soft-filtered rejected ones.
     "loc_theo_judge": False,
+    # Soft filter: when accepted is non-empty, drop rejected judge_law articles
+    # with 0 matched elements (stops unrelated crimes like "mua bán người" from
+    # polluting the answer) and cap remaining rejected articles.
+    "loc_mem": True,
+    "max_rejected_in_answer": 3,
 }
 
 
 # Display names for codes that are not obvious to the LLM.
-LAW_NAMES = {"XLVPHC": "Luật Xử lý vi phạm hành chính", "ND282": "Nghị định 282/2025/NĐ-CP"}
+LAW_NAMES = {
+    "XLVPHC": "Luật Xử lý vi phạm hành chính",
+    "ND282": "Nghị định 282/2025/NĐ-CP",
+    "THAHS": "Luật Thi hành án hình sự",
+    "TGTG": "Luật Thi hành tạm giữ, tạm giam",
+}
+
+
+def _call_generate(
+    generate: Generate, prompt: str, max_tokens: Optional[int] = None, think: Optional[bool] = None
+) -> str:
+    """Invoke generate(), forwarding `think` only when the callable accepts it
+    (so lightweight test fakes with signature `(prompt, max_tokens=None)` keep
+    working unchanged)."""
+    kwargs: Dict[str, object] = {}
+    if max_tokens is not None:
+        kwargs["max_tokens"] = max_tokens
+    if think is not None:
+        try:
+            params = inspect.signature(generate).parameters
+            accepts_think = "think" in params or any(
+                p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()
+            )
+        except (TypeError, ValueError):
+            accepts_think = False
+        if accepts_think:
+            kwargs["think"] = think
+    return generate(prompt, **kwargs)
+
+
+def _current_date_note(cfg: Dict) -> str:
+    label = str(cfg.get("ngay_hien_tai") or "").strip()
+    if not label:
+        today = datetime.date.today()
+        label = f"tháng {today.month}/{today.year}"
+    return f"Thời điểm hiện tại: {label} (dùng mốc này để tính tuổi từ ngày/tháng/năm sinh nếu câu hỏi có nêu)."
 
 
 def law_label(g: HierarGraph, law_node: str) -> str:
@@ -220,11 +275,12 @@ def _apply_rank(items: List, rank: List[int], keep: int) -> List:
 
 
 def is_general_law(d: Dict) -> bool:
-    """BLHS general part (Điều 1-107) or any BLTTHS article."""
-    if d.get("bo_luat") == "BLTTHS":
+    """BLHS general part (Điều 1-107), BLTTHS, THAHS, or TGTG articles."""
+    code = d.get("bo_luat", "BLHS")
+    if code in ("BLTTHS", "THAHS", "TGTG"):
         return True
     entry = str(d.get("entry", ""))
-    return d.get("bo_luat", "BLHS") == "BLHS" and entry.isdigit() and int(entry) <= 107
+    return code == "BLHS" and entry.isdigit() and int(entry) <= 107
 
 
 def general_title_index(g: HierarGraph, embed: Embed) -> List[Tuple[str, np.ndarray]]:
@@ -306,9 +362,12 @@ def grounded_issues(issues: List[Dict[str, str]], source: str, template: str, mi
     return kept, dropped
 
 
-def rewrite_question(question: str, generate: Generate) -> str:
+def rewrite_question(question: str, generate: Generate, date_note: str = "") -> str:
     """The question in legal language (QA_REWRITE_PROMPT), or "" if empty."""
-    text = generate(QA_REWRITE_PROMPT.format(question=question), max_tokens=256).strip()
+    prompt = QA_REWRITE_PROMPT.format(question=question)
+    if date_note:
+        prompt = f"{date_note}\n\n{prompt}"
+    text = generate(prompt, max_tokens=256).strip()
     return text.strip("`").strip()
 
 
@@ -317,17 +376,17 @@ def llm_issue_laws(
     rewrite: str = "", rank_vec=None,
 ) -> Tuple[List[str], List[Dict]]:
     """The LLM names <=max_issues general legal issues; each goes to the general
-    articles whose titles are closest. With rank_vec, the articles found are
-    ordered by how close their titles are to it (the restated question), so
-    an issue the LLM named out of habit does not take the reserved slots
-    first (Kaggle run 4: "độ tuổi chịu trách nhiệm hình sự" in 146/187
-    questions pushed out 16 right articles)."""
+    articles whose titles are closest. With rank_vec, candidates are ranked by
+    combining issue-to-title similarity and question-to-title similarity so
+    exact title matches for a legal issue are not drowned out by a long
+    rewrite while unrelated habit issues still sink."""
     prompt = LEGAL_ISSUES_PROMPT.format(question=question, rewrite=rewrite or question)
     issues, dropped = grounded_issues(
         parse_issues(generate(prompt, max_tokens=1024)), f"{question} {rewrite}", LEGAL_ISSUES_PROMPT
     )
     index = general_title_index(g, embed)
     laws: List[str] = []
+    best_issue_sim: Dict[str, float] = {}
     hits = []
     for issue in issues[:max_issues]:
         if not index or not issue.strip():
@@ -336,13 +395,16 @@ def llm_issue_laws(
         ranked = sorted(index, key=lambda x: -float(x[1] @ q))[:per_issue]
         hits.append({"van_de": issue, "dieu": [law_label(g, n) for n, _ in ranked],
                      "cosine": [round(float(v @ q), 3) for _, v in ranked]})
-        for n, _ in ranked:
+        for n, v in ranked:
+            sim = float(v @ q)
+            if n not in best_issue_sim or sim > best_issue_sim[n]:
+                best_issue_sim[n] = sim
             if n not in laws:
                 laws.append(n)
     if rank_vec is not None and laws:
         title_vec = dict(index)
         r = _unit(rank_vec)
-        laws.sort(key=lambda n: -float(title_vec[n] @ r))
+        laws.sort(key=lambda n: -(0.5 * best_issue_sim.get(n, 0.0) + 0.5 * float(title_vec[n] @ r)))
     hits += [{"van_de": d["van_de"], "bo": d["ly_do"], "trich": d["trich"]} for d in dropped]
     return laws, hits
 
@@ -571,6 +633,36 @@ def collapse_point_lists(citations: List) -> Tuple[List, List[str]]:
     return out, notes
 
 
+def select_articles_for_answer(
+    candidates: List[str], judgments: Dict[str, Dict], cfg: Dict
+) -> Tuple[List[str], bool]:
+    """Choose which judged candidates are shown to QA_ANSWER_PROMPT.
+
+    - loc_theo_judge=True: original hard filter (accepted only, or top-3 fallback).
+    - loc_mem=True (default): keep all accepted articles; from rejected ones,
+      drop judge_law articles with 0 matched elements when accepted is non-empty
+      (removes unrelated crime noise like 'mua bán người'), and cap remaining
+      rejected articles to max_rejected_in_answer.
+    - loc_mem=False: keep all candidates (accepted first, then rejected).
+    """
+    accepted = [n for n in candidates if judgments[n]["ap_dung"]]
+    fallback = not accepted
+    if cfg["loc_theo_judge"]:
+        return accepted or candidates[:3], fallback
+    rejected = [n for n in candidates if n not in accepted]
+    if not cfg.get("loc_mem", True):
+        return accepted + rejected, fallback
+    useful = [
+        n for n in rejected
+        if judgments[n].get("cach") != "judge_law" or judgments[n].get("so_dung", 0) > 0
+    ]
+    zero_match = [n for n in rejected if n not in useful]
+    cap = int(cfg.get("max_rejected_in_answer", 3))
+    if accepted:
+        return accepted + useful[:cap], fallback
+    return (useful + zero_match)[: max(5, cap)], fallback
+
+
 def answer_question(
     g: HierarGraph, question: str, generate: Generate, embed: Embed, cfg: Optional[Dict] = None,
     progress: Optional[Callable[[str, Dict], None]] = None,
@@ -581,7 +673,8 @@ def answer_question(
     result."""
     cfg = {**DEFAULTS, **(cfg or {})}
     report = progress or (lambda step, info: None)
-    rewrite = rewrite_question(question, generate) if cfg["dien_dat_lai"] else ""
+    date_note = _current_date_note(cfg)
+    rewrite = rewrite_question(question, generate, date_note) if cfg["dien_dat_lai"] else ""
     report("dien_dat_lai", {"text": rewrite})
     description = ""
     if cfg["dung_an"]:  # features only serve the case routes
@@ -597,21 +690,26 @@ def answer_question(
         judgments[n] = judge_candidate(g, n, question, generate, cfg["judge_mode"], cfg["judge_chua_ro"])
         report("tham_dinh", {"xong": i, "tong": len(retrieval["ung_vien"]), "dieu": law_label(g, n),
                              "ap_dung": judgments[n]["ap_dung"]})
-    accepted = [n for n in retrieval["ung_vien"] if judgments[n]["ap_dung"]]
-    fallback = not accepted
-    if cfg["loc_theo_judge"]:
-        used = accepted or retrieval["ung_vien"][:3]
-    else:
-        used = accepted + [n for n in retrieval["ung_vien"] if n not in accepted]
+    used, fallback = select_articles_for_answer(retrieval["ung_vien"], judgments, cfg)
     if cfg["xep_theo_do_chac"]:
         used = order_by_confidence(used, judgments, retrieval["tuyen"])
 
-    prompt = QA_ANSWER_PROMPT.format(
+    prompt = f"{date_note}\n\n" + QA_ANSWER_PROMPT.format(
         question=question, laws=render_laws_for_answer(g, used, cfg, judgments, embed(question), embed)
     )
-    report("tra_loi", {"so_dieu": len(used)})
-    raw, answer, retried = answer_with_retry(prompt, generate, cfg["min_answer_words"], cfg["answer_max_tokens"])
     shown = {law_label(g, n): g.node(n)["description"][: cfg["law_text_chars"]] for n in used}
+    use_think = bool(cfg.get("answer_think", False))
+    ans_tokens = cfg["answer_think_max_tokens"] if use_think else cfg["answer_max_tokens"]
+    report("tra_loi", {"so_dieu": len(used)})
+    raw, answer, retried = answer_with_retry(
+        prompt,
+        generate,
+        cfg["min_answer_words"],
+        ans_tokens,
+        think=True if use_think else None,
+        shown_laws=shown,
+        verify_citations=bool(cfg.get("tu_sua_loi_trich_dan", False)),
+    )
     return {
         "dien_dat_lai": rewrite,
         "dac_trung": description,
@@ -637,17 +735,45 @@ def order_by_confidence(laws: List[str], judgments: Dict[str, Dict], routes: Dic
     return sorted(laws, key=lambda n: (not judgments.get(n, {}).get("ap_dung"), -n_routes[n], rank[n]))
 
 
-def answer_with_retry(prompt: str, generate: Generate, min_words: int, max_tokens: int = 1024):
-    """(raw, parsed answer, retried). A terse answer is asked again once,
-    with a note; the longer of the two is kept."""
-    raw = generate(prompt, max_tokens=max_tokens)
+def answer_with_retry(
+    prompt: str,
+    generate: Generate,
+    min_words: int,
+    max_tokens: int = 1024,
+    *,
+    think: Optional[bool] = None,
+    shown_laws: Optional[Dict[str, str]] = None,
+    verify_citations: bool = False,
+):
+    """(raw, parsed answer, retried). Retries once if the answer is too short,
+    unparseable, or (when verify_citations=True) has hallucinated articles,
+    fake/misplaced citation quotes, or leaked Chinese characters."""
+    raw = _call_generate(generate, prompt, max_tokens=max_tokens, think=think)
     answer = parse_answer(raw)
     n = len((answer or {}).get("cau_tra_loi", "").split())
-    if not min_words or n >= min_words:
+    too_short = bool(min_words and n < min_words)
+    issues = answer_issues(answer, shown_laws) if (verify_citations and shown_laws is not None) else []
+    if not too_short and not issues and answer is not None:
         return raw, answer, False
-    raw2 = generate(prompt + QA_ANSWER_TOO_SHORT_NOTE.format(n=n), max_tokens=max_tokens)
+
+    notes = []
+    if too_short:
+        notes.append(QA_ANSWER_TOO_SHORT_NOTE.format(n=n))
+    if issues:
+        bullet_list = "\n".join(f"- {it}" for it in issues)
+        notes.append(QA_ANSWER_FIX_NOTE.format(issues=bullet_list))
+    if not notes:
+        notes.append(QA_ANSWER_FIX_NOTE.format(issues="- Đầu ra không đúng định dạng JSON hợp lệ."))
+
+    raw2 = _call_generate(generate, prompt + "".join(notes), max_tokens=max_tokens, think=think)
     answer2 = parse_answer(raw2)
-    if answer2 and len(answer2.get("cau_tra_loi", "").split()) > n:
+    if answer2 is None:
+        return raw, answer, True
+    if answer is None:
+        return raw2, answer2, True
+    issues2 = answer_issues(answer2, shown_laws) if (verify_citations and shown_laws is not None) else []
+    n2 = len(answer2.get("cau_tra_loi", "").split())
+    if len(issues2) < len(issues) or (len(issues2) == len(issues) and n2 > n):
         return raw2, answer2, True
     return raw, answer, True
 

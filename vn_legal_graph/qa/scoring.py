@@ -16,6 +16,14 @@ LAW_ALIASES = {
     "bộ luật hình sự": "BLHS",
     "bltths": "BLTTHS",
     "bộ luật tố tụng hình sự": "BLTTHS",
+    "thahs": "THAHS",
+    "luật thi hành án hình sự": "THAHS",
+    "tgtg": "TGTG",
+    "luật thi hành tạm giữ, tạm giam": "TGTG",
+    "xlvphc": "XLVPHC",
+    "luật xử lý vi phạm hành chính": "XLVPHC",
+    "nd282": "ND282",
+    "nghị định 282/2025/nđ-cp": "ND282",
 }
 
 

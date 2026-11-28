@@ -11,7 +11,20 @@ from typing import Dict, List, Optional, Tuple
 
 # Vietnamese phone numbers: 0xxxxxxxxx (10 digits, spaces/dots allowed between groups) or +84...
 PHONE_RE = re.compile(r"(?<![\d])(?:\+84|0)(?:[\s.-]?\d){9}(?![\d])")
-ALIASES = {"blhs": "BLHS", "bộ luật hình sự": "BLHS", "bltths": "BLTTHS", "bộ luật tố tụng hình sự": "BLTTHS"}
+ALIASES = {
+    "blhs": "BLHS",
+    "bộ luật hình sự": "BLHS",
+    "bltths": "BLTTHS",
+    "bộ luật tố tụng hình sự": "BLTTHS",
+    "thahs": "Luật Thi hành án hình sự",
+    "luật thi hành án hình sự": "Luật Thi hành án hình sự",
+    "tgtg": "Luật Thi hành tạm giữ, tạm giam",
+    "luật thi hành tạm giữ, tạm giam": "Luật Thi hành tạm giữ, tạm giam",
+    "xlvphc": "Luật Xử lý vi phạm hành chính",
+    "luật xử lý vi phạm hành chính": "Luật Xử lý vi phạm hành chính",
+    "nd282": "Nghị định 282/2025/NĐ-CP",
+    "nghị định 282/2025/nđ-cp": "Nghị định 282/2025/NĐ-CP",
+}
 
 
 def read_table(path: str) -> List[Dict]:
